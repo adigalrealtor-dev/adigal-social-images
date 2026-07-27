@@ -4,6 +4,7 @@ export const config = { runtime: 'edge' };
 
 const el = (type, props, ...children) => ({ type, props: { ...props, children: children.flat() } });
 const NAVY = '#0B2033', GOLD = '#C9A15C', SAND = '#F4EFE4', CORAL = '#E8734A', MUTED = '#8CA3B5';
+const LOGO_URL = 'https://adigal-social-images.vercel.app/logo.jpg';
 
 async function loadGoogleFont(family, weight, text) {
   const css = await fetch(
@@ -64,7 +65,7 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 17, letterSpacing: 1, display: 'flex' } }, phone)));
 
   const logoBadge = el('div', { style: { position: 'absolute', top: 44, left: 44, display: 'flex', alignItems: 'center', gap: 12, backgroundColor: 'rgba(11,32,51,0.85)', padding: '8px 20px 8px 8px', borderRadius: 999 } },
-    el('div', { style: { width: 40, height: 40, borderRadius: 999, backgroundColor: GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces', fontWeight: 700, fontSize: 17, color: NAVY } }, agentInitials),
+    el('img', { src: LOGO_URL, width: 40, height: 40, style: { borderRadius: 999, objectFit: 'cover', display: 'flex' } }),
     el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: SAND, fontSize: 15, letterSpacing: 1, display: 'flex' } }, `${agentName.toUpperCase()} REALTY`));
 
   const listedBadge = el('div', { style: { position: 'absolute', top: 44, right: 44, display: 'flex', backgroundColor: CORAL, padding: '10px 22px', borderRadius: 999 } },
