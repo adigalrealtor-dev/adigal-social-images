@@ -3,68 +3,108 @@ import { ImageResponse } from '@vercel/og';
 export const config = { runtime: 'edge' };
 
 const el = (type, props, ...children) => ({ type, props: { ...props, children: children.flat() } });
-const NAVY = '#0B2033', GOLD = '#C9A15C', SAND = '#F4EFE4', CORAL = '#E8734A', MUTED = '#8CA3B5';
-const LOGO_URL = 'https://adigal-social-images.vercel.app/logo.jpg';
+
+const NAVY = '#071F36';
+const GOLD = '#C8A052';
+const RED = '#8F171C';
+const CREAM = '#F6EFE2';
+const INK = '#10243B';
+const WHITE = '#FFFDF8';
 
 async function loadGoogleFont(family, weight, text) {
-  const css = await fetch(
-    `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}&text=${encodeURIComponent(text)}`,
-    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' } }
-  ).then((r) => r.text());
-  const match = css.match(/src: url\(([^)]+)\)/);
-  if (!match) return null;
-  const res = await fetch(match[1]);
-  return await res.arrayBuffer();
+  try {
+    const css = await fetch(
+      `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}&text=${encodeURIComponent(text)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' } }
+    ).then((r) => r.text());
+    const match = css.match(/src: url\(([^)]+)\)/);
+    if (!match) return null;
+    const res = await fetch(match[1]);
+    return await res.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+const asset = (req, path) => new URL(path, req.url).toString();
+const short = (value, max) => {
+  const text = String(value || '').trim();
+  return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
+};
+
+function statTile(num, label) {
+  return el('div', {
+    style: {
+      width: 270,
+      height: 98,
+      backgroundColor: NAVY,
+      border: `2px solid ${GOLD}`,
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      padding: '13px 18px',
+    },
+  },
+    el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: GOLD, fontSize: 37, lineHeight: 1, display: 'flex' } }, short(num, 12)),
+    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 12, letterSpacing: 1, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
 }
 
 export default async function handler(req) {
   const { searchParams: q } = new URL(req.url);
-  const headline = q.get('headline') || 'Sellers still have the edge';
-  const sub = q.get('sub') || 'South Florida inventory stays tight heading into fall.';
+
+  const headline = short(q.get('headline') || 'Sellers still have the edge', 52);
+  const sub = short(q.get('sub') || 'South Florida inventory stays tight heading into fall.', 96);
+  const photoUrl = q.get('photo_url') || q.get('background_url') || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1400&h=900&fit=crop';
+  const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
+  const headshotUrl = q.get('headshot_url') || asset(req, '/headshot.jpg');
   const agentName = q.get('agent_name') || 'Adi Gal';
-  const agentInitials = q.get('agent_initials') || 'AG';
+  const phone = q.get('phone') || '305-409-1305';
+  const handle = q.get('handle') || '@adigalrealtor';
   const stats = [
-    [q.get('stat1_num') || '2.1 mo', q.get('stat1_label') || 'INVENTORY, DOWN FROM 2.6'],
-    [q.get('stat2_num') || '38 days', q.get('stat2_label') || 'AVERAGE TIME ON MARKET'],
-    [q.get('stat3_num') || '+4.2%', q.get('stat3_label') || 'MEDIAN PRICE, YEAR OVER YEAR'],
+    [q.get('stat1_num') || '2.1 mo', q.get('stat1_label') || 'Inventory'],
+    [q.get('stat2_num') || '38 days', q.get('stat2_label') || 'Avg. time on market'],
+    [q.get('stat3_num') || '+4.2%', q.get('stat3_label') || 'Median price YoY'],
   ];
 
-  const allText = headline + sub + agentName + agentInitials + stats.flat().join('') + 'MARKET UPDATE';
-  const [frauncesBold, frauncesBlack, interReg, interSemi, interBold] = await Promise.all([
-    loadGoogleFont('Fraunces', 700, allText),
-    loadGoogleFont('Fraunces', 900, allText),
+  const allText = [headline, sub, agentName, phone, handle, stats.flat().join(' '), 'Market Pulse South Florida Real Estate'].join(' ');
+  const [playfairBold, playfairBlack, interReg, interSemi, interBold] = await Promise.all([
+    loadGoogleFont('Playfair Display', 700, allText),
+    loadGoogleFont('Playfair Display', 900, allText),
     loadGoogleFont('Inter', 400, allText),
     loadGoogleFont('Inter', 600, allText),
-    loadGoogleFont('Inter', 700, allText),
+    loadGoogleFont('Inter', 800, allText),
   ]);
   const fonts = [
-    frauncesBold && { name: 'Fraunces', data: frauncesBold, weight: 700, style: 'normal' },
-    frauncesBlack && { name: 'Fraunces', data: frauncesBlack, weight: 900, style: 'normal' },
+    playfairBold && { name: 'Playfair', data: playfairBold, weight: 700, style: 'normal' },
+    playfairBlack && { name: 'Playfair', data: playfairBlack, weight: 900, style: 'normal' },
     interReg && { name: 'Inter', data: interReg, weight: 400, style: 'normal' },
     interSemi && { name: 'Inter', data: interSemi, weight: 600, style: 'normal' },
-    interBold && { name: 'Inter', data: interBold, weight: 700, style: 'normal' },
+    interBold && { name: 'Inter', data: interBold, weight: 800, style: 'normal' },
   ].filter(Boolean);
 
-  const stripe = el('div', { style: { position: 'absolute', top: -40, bottom: -40, right: 120, width: 14, backgroundColor: GOLD, display: 'flex', transform: 'skewX(-8deg)' } });
-  const badge = el('div', { style: { display: 'flex', backgroundColor: CORAL, padding: '9px 20px', borderRadius: 999, alignSelf: 'flex-start' } },
-    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: '#3A1608', fontSize: 15, letterSpacing: 2, display: 'flex' } }, 'MARKET UPDATE'));
-  const statRow = (num, lab) => el('div', { style: { display: 'flex', alignItems: 'center', gap: 16, borderTop: '1px solid rgba(244,239,228,0.15)', paddingTop: 18, paddingBottom: 18 } },
-    el('div', { style: { fontFamily: 'Fraunces', fontWeight: 900, color: GOLD, fontSize: 38, minWidth: 150, flexShrink: 0, display: 'flex' } }, num),
-    el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: SAND, fontSize: 15, letterSpacing: 1, display: 'flex', maxWidth: 320 } }, lab));
+  const tree = el('div', { style: { width: 1080, height: 1080, position: 'relative', display: 'flex', backgroundColor: CREAM, overflow: 'hidden' } },
+    el('img', { src: photoUrl, style: { position: 'absolute', top: 0, left: 0, width: 1080, height: 500, objectFit: 'cover' } }),
+    el('div', { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 500, display: 'flex', background: 'linear-gradient(90deg, rgba(7,31,54,0.78), rgba(7,31,54,0.16))' } }),
+    el('div', { style: { position: 'absolute', top: 0, left: 0, width: 360, height: 138, display: 'flex', background: 'linear-gradient(100deg, rgba(255,253,248,0.96), rgba(255,253,248,0.72), rgba(255,253,248,0))' } }),
+    el('img', { src: logoUrl, style: { position: 'absolute', top: 26, left: 42, width: 172, height: 92, objectFit: 'contain' } }),
 
-  const tree = el('div', { style: { width: 1080, height: 1080, display: 'flex', position: 'relative', backgroundColor: NAVY } },
-    stripe,
-    el('div', { style: { position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', padding: '72px 140px 72px 72px' } },
-      badge,
-      el('div', { style: { fontFamily: 'Fraunces', fontWeight: 900, color: SAND, fontSize: 68, lineHeight: 1.08, marginTop: 32, display: 'flex', maxWidth: 780 } }, headline),
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 400, color: MUTED, fontSize: 18, lineHeight: 1.5, marginTop: 20, display: 'flex', maxWidth: 560 } }, sub),
-      el('div', { style: { display: 'flex', flexDirection: 'column', marginTop: 44, maxWidth: 640 } }, ...stats.map(([n, l]) => statRow(n, l))),
-      el('div', { style: { flex: 1, display: 'flex' } }),
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } },
-        el('img', { src: LOGO_URL, width: 48, height: 48, style: { borderRadius: 999, objectFit: 'cover', display: 'flex' } }),
-        el('div', { style: { display: 'flex', flexDirection: 'column' } },
-          el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: SAND, fontSize: 19, display: 'flex' } }, agentName),
-          el('div', { style: { fontFamily: 'Inter', fontWeight: 400, color: MUTED, fontSize: 14, display: 'flex' } }, 'Realtor, South Florida')))));
+    el('div', { style: { position: 'absolute', top: 400, left: 0, right: 0, height: 126, backgroundColor: RED, borderTop: `5px solid ${GOLD}`, borderBottom: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', paddingLeft: 54 } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 62, letterSpacing: 1, display: 'flex' } }, 'MARKET PULSE')),
+
+    el('div', { style: { position: 'absolute', top: 526, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
+    el('div', { style: { position: 'absolute', top: 560, left: 54, width: 660, display: 'flex', flexDirection: 'column' } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 58, lineHeight: 1.04, display: 'flex' } }, headline),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: '#4F6070', fontSize: 21, lineHeight: 1.32, display: 'flex', marginTop: 16 } }, sub),
+      el('div', { style: { display: 'flex', gap: 16, marginTop: 26, flexWrap: 'wrap' } }, ...stats.map(([num, label]) => statTile(num, label)))),
+
+    el('div', { style: { position: 'absolute', right: 0, bottom: 90, width: 368, height: 470, backgroundColor: WHITE, borderTopLeftRadius: 180, display: 'flex', overflow: 'hidden' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', right: -28, bottom: 70, width: 405, height: 500, objectFit: 'cover', objectPosition: '22% 50%' } }),
+
+    el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: NAVY, borderTop: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', padding: '0 52px', gap: 26 } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 40, display: 'flex' } }, phone),
+      el('div', { style: { width: 2, height: 42, backgroundColor: 'rgba(200,160,82,0.55)', display: 'flex' } }),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 19, display: 'flex' } }, `${agentName} | Real Estate Broker`),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 17, display: 'flex', marginLeft: 'auto' } }, handle)));
 
   return new ImageResponse(tree, { width: 1080, height: 1080, fonts });
 }
