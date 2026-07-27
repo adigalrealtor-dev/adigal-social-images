@@ -89,5 +89,10 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 19, display: 'flex' } }, `${agentName} | Real Estate Broker`),
       el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 17, display: 'flex', marginLeft: 'auto' } }, handle)));
 
-  return new ImageResponse(tree, { width: 1080, height: 1080, fonts });
+  return new ImageResponse(tree, {
+    width: 1080,
+    height: 1080,
+    fonts,
+    headers: { 'Cache-Control': 'no-store, max-age=0' },
+  });
 }
