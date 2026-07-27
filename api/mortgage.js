@@ -4,6 +4,7 @@ export const config = { runtime: 'edge' };
 
 const el = (type, props, ...children) => ({ type, props: { ...props, children: children.flat() } });
 const NAVY = '#0B2033', GOLD = '#C9A15C', SAND = '#F4EFE4', CORAL = '#E8734A', MUTED = '#8CA3B5';
+const LOGO_URL = 'https://adigal-social-images.vercel.app/logo.jpg';
 
 async function loadGoogleFont(family, weight, text) {
   const css = await fetch(
@@ -56,7 +57,7 @@ export default async function handler(req) {
       el('div', { style: { flex: 1, display: 'flex' } }),
       el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', borderTop: '1px solid rgba(244,239,228,0.15)', paddingTop: 28 } },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } },
-          el('div', { style: { width: 48, height: 48, borderRadius: 999, backgroundColor: GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Fraunces', fontWeight: 700, fontSize: 19, color: NAVY } }, agentInitials),
+          el('img', { src: LOGO_URL, width: 48, height: 48, style: { borderRadius: 999, objectFit: 'cover', display: 'flex' } }),
           el('div', { style: { display: 'flex', flexDirection: 'column' } },
             el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: SAND, fontSize: 19, display: 'flex' } }, agentName),
             el('div', { style: { fontFamily: 'Inter', fontWeight: 400, color: MUTED, fontSize: 14, display: 'flex' } }, 'Realtor, South Florida'))),
