@@ -86,8 +86,40 @@ Example:
 
 `/api/listing?photo_url=...&price=...&theme=coastal&headshot=adi-white-office&v={{zap_meta_timestamp}}`
 
-## Wiring into Zapier
-No change from the setup guide's Code by Zapier steps — same `image_url` construction pattern,
-same Facebook/Instagram posting steps. Just make sure `IMAGE_BASE_URL` in Storage by Zapier still
-points at the same `adigal-social-images.vercel.app` domain (it doesn't change even though the
-underlying code did).
+## Daily Posting Without Zapier
+
+Zapier is not required for the production posting flow. The repo includes a GitHub Actions schedule
+in `.github/workflows/daily-instagram.yml` that runs every day at 8:30 AM New York time during
+daylight saving time.
+
+The scheduled script:
+
+1. Pulls listing data from Bridge when the rotation lands on a listing post.
+2. Builds one of the image URLs from this deployed Vercel app.
+3. Uses Anthropic to write the caption.
+4. Publishes the image directly to Instagram through Meta's API.
+
+Instagram can keep cross-posting to Facebook from the Instagram account settings, so the script does
+not call Facebook Pages directly.
+
+Add these GitHub repository secrets before enabling the workflow:
+
+- `ANTHROPIC_API_KEY`
+- `BRIDGE_ACCESS_TOKEN`
+- `BRIDGE_DATASET_ID`
+- `META_IG_USER_ID`
+- `META_ACCESS_TOKEN`
+
+Optional secrets:
+
+- `ANTHROPIC_MODEL` defaults to `claude-sonnet-4-20250514`
+- `BRIDGE_API_BASE` defaults to `https://api.bridgedataoutput.com/api/v2/OData`
+- `BRIDGE_AUTH_MODE` defaults to `query`; set to `bearer` if your Bridge token expects an Authorization header
+- `BRIDGE_FILTER` defaults to `StandardStatus eq 'Active'`
+- `META_GRAPH_VERSION` defaults to `v20.0`
+
+Manual dry run:
+
+```bash
+npm run post:daily:dry
+```

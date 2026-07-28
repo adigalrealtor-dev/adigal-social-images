@@ -3,6 +3,10 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "post:daily": "node scripts/post-daily-instagram.js",
+    "post:daily:dry": "DRY_RUN=1 node scripts/post-daily-instagram.js"
+  },
   "dependencies": {
     "@vercel/og": "^0.6.3"
   }

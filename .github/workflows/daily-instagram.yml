@@ -1,0 +1,48 @@
+name: Daily Instagram Post
+
+on:
+  schedule:
+    # 8:30 AM America/New_York during daylight saving time.
+    - cron: '30 12 * * *'
+  workflow_dispatch:
+    inputs:
+      post_type:
+        description: 'Optional: market, listing, or mortgage'
+        required: false
+        type: string
+      dry_run:
+        description: 'Generate image/caption without publishing'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Publish daily Instagram post
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          BRIDGE_ACCESS_TOKEN: ${{ secrets.BRIDGE_ACCESS_TOKEN }}
+          BRIDGE_DATASET_ID: ${{ secrets.BRIDGE_DATASET_ID }}
+          BRIDGE_API_BASE: ${{ secrets.BRIDGE_API_BASE }}
+          BRIDGE_AUTH_MODE: ${{ secrets.BRIDGE_AUTH_MODE }}
+          BRIDGE_FILTER: ${{ secrets.BRIDGE_FILTER }}
+          META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app' }}
+          POST_TYPE: ${{ inputs.post_type }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: node scripts/post-daily-instagram.js
