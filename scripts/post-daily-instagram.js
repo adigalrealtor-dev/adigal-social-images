@@ -192,6 +192,8 @@ async function makeCaption(type, listing) {
     process.env.ANTHROPIC_MODEL,
     'claude-3-5-sonnet-latest',
     'claude-3-5-haiku-latest',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-haiku-20240307',
   ].filter(Boolean);
 
   for (const model of models) {
