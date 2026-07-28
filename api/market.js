@@ -35,17 +35,17 @@ const short = (value, max) => {
 function statTile(num, label) {
   return el('div', {
     style: {
-      width: 270,
-      height: 98,
+      width: 250,
+      height: 92,
       backgroundColor: NAVY,
       border: `2px solid ${GOLD}`,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      padding: '13px 18px',
+      padding: '12px 16px',
     },
   },
-    el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: GOLD, fontSize: 37, lineHeight: 1, display: 'flex' } }, short(num, 12)),
+    el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: GOLD, fontSize: 35, lineHeight: 1, display: 'flex' } }, short(num, 12)),
     el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 12, letterSpacing: 1, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
 }
 
@@ -92,13 +92,16 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 62, letterSpacing: 1, display: 'flex' } }, 'MARKET PULSE')),
 
     el('div', { style: { position: 'absolute', top: 526, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 560, left: 54, width: 660, display: 'flex', flexDirection: 'column' } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 58, lineHeight: 1.04, display: 'flex' } }, headline),
+    el('div', { style: { position: 'absolute', top: 526, right: 0, bottom: 90, width: 330, backgroundColor: NAVY, borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
+    el('div', { style: { position: 'absolute', top: 552, right: 48, width: 235, height: 235, borderRadius: 999, backgroundColor: WHITE, border: `5px solid ${GOLD}`, display: 'flex', overflow: 'hidden' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', top: 544, right: 38, width: 255, height: 315, objectFit: 'cover', objectPosition: '22% 42%' } }),
+    el('div', { style: { position: 'absolute', top: 560, left: 54, width: 650, display: 'flex', flexDirection: 'column' } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 56, lineHeight: 1.04, display: 'flex' } }, headline),
       el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: '#4F6070', fontSize: 21, lineHeight: 1.32, display: 'flex', marginTop: 16 } }, sub),
       el('div', { style: { display: 'flex', gap: 16, marginTop: 26, flexWrap: 'wrap' } }, ...stats.map(([num, label]) => statTile(num, label)))),
-
-    el('div', { style: { position: 'absolute', right: 0, bottom: 90, width: 368, height: 470, backgroundColor: WHITE, borderTopLeftRadius: 180, display: 'flex', overflow: 'hidden' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: -28, bottom: 70, width: 405, height: 500, objectFit: 'cover', objectPosition: '22% 50%' } }),
+    el('div', { style: { position: 'absolute', right: 48, bottom: 144, width: 235, height: 70, display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 28, display: 'flex' } }, agentName),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 13, letterSpacing: 1, display: 'flex', marginTop: 4 } }, 'SOUTH FLORIDA REALTOR')),
 
     el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: NAVY, borderTop: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', padding: '0 52px', gap: 26 } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 40, display: 'flex' } }, phone),

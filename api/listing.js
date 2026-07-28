@@ -178,17 +178,33 @@ export default async function handler(req) {
     el('div', {
       style: {
         position: 'absolute',
-        top: 646,
-        right: 18,
-        width: 390,
-        height: 430,
+        top: 690,
+        right: 0,
+        bottom: 90,
+        width: 348,
+        display: 'flex',
+        backgroundColor: NAVY,
+        borderLeft: `5px solid ${GOLD}`,
+      },
+    }),
+    el('div', {
+      style: {
+        position: 'absolute',
+        top: 714,
+        right: 58,
+        width: 224,
+        height: 224,
         display: 'flex',
         backgroundColor: WHITE,
-        borderTopLeftRadius: 190,
+        border: `5px solid ${GOLD}`,
+        borderRadius: 999,
         overflow: 'hidden',
       },
     }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: -16, bottom: 70, width: 405, height: 500, objectFit: 'cover', objectPosition: '22% 50%' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', right: 58, top: 714, width: 224, height: 224, borderRadius: 999, objectFit: 'cover', objectPosition: '22% 42%' } }),
+    el('div', { style: { position: 'absolute', right: 44, top: 934, width: 254, display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 24, display: 'flex' } }, agentName),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 11, letterSpacing: 1, display: 'flex', marginTop: 3 } }, 'REAL ESTATE BROKER')),
 
     el('div', {
       style: {
