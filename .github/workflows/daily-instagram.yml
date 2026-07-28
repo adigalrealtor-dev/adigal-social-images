@@ -35,6 +35,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
           BRIDGE_ACCESS_TOKEN: ${{ secrets.BRIDGE_ACCESS_TOKEN }}
+          BRIDGE_CLIENT_ID: ${{ secrets.BRIDGE_CLIENT_ID }}
+          BRIDGE_CLIENT_SECRET: ${{ secrets.BRIDGE_CLIENT_SECRET }}
           BRIDGE_DATASET_ID: ${{ secrets.BRIDGE_DATASET_ID }}
           BRIDGE_AGENT_ID: ${{ secrets.BRIDGE_AGENT_ID }}
           BRIDGE_API_BASE: ${{ secrets.BRIDGE_API_BASE }}

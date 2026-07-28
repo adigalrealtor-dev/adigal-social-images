@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 const BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app').replace(/\/$/, '');
 const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
 
@@ -52,6 +54,10 @@ function cleanSecret(value) {
 
 function cleanBridgeToken(value) {
   return cleanSecret(value).replace(/^Bearer\s+/i, '').trim();
+}
+
+function md5(value) {
+  return crypto.createHash('md5').update(value).digest('hex');
 }
 
 function buildUrl(path, params) {
@@ -147,7 +153,7 @@ async function fetchBridgeODataListing({ token, dataset, seed }) {
   const bridgeBase = (process.env.BRIDGE_API_BASE || 'https://api.bridgedataoutput.com/api/v2/OData').replace(/\/$/, '');
   const data = await fetchBridgeJson(() => {
     const url = new URL(`${bridgeBase}/${dataset}/Property`);
-    url.searchParams.set('$top', process.env.BRIDGE_TOP || '12');
+    url.searchParams.set('$top', process.env.BRIDGE_TOP || '30');
     url.searchParams.set('$orderby', process.env.BRIDGE_ORDER_BY || 'ModificationTimestamp desc');
     url.searchParams.set('$expand', 'Media');
 
@@ -162,15 +168,15 @@ async function fetchBridgeODataListing({ token, dataset, seed }) {
   const rows = data.value || data.d?.results || [];
   if (!rows.length) return null;
 
-  const row = rows[Math.abs(hash(seed)) % rows.length];
-  return normalizeBridgeListing(row);
+  const listing = pickBridgeListing(rows.map(normalizeBridgeListing), seed);
+  return hydrateBridgeListingPhotos(listing, dataset);
 }
 
 async function fetchBridgeNativeListing({ token, dataset, seed }) {
   const bridgeBase = (process.env.BRIDGE_NATIVE_API_BASE || 'https://api.bridgedataoutput.com/api/v2').replace(/\/$/, '');
   const data = await fetchBridgeJson(() => {
     const url = new URL(`${bridgeBase}/${dataset}/listings`);
-    url.searchParams.set('limit', process.env.BRIDGE_TOP || '12');
+    url.searchParams.set('limit', process.env.BRIDGE_TOP || '30');
     url.searchParams.set('sortBy', process.env.BRIDGE_NATIVE_SORT_BY || 'ModificationTimestamp');
     url.searchParams.set('order', process.env.BRIDGE_NATIVE_ORDER || 'desc');
     url.searchParams.set('StandardStatus', process.env.BRIDGE_STATUS || 'Active');
@@ -180,20 +186,20 @@ async function fetchBridgeNativeListing({ token, dataset, seed }) {
   const rows = data.bundle || data.value || data.records || data.listings || data.data || [];
   if (!rows.length) return null;
 
-  const row = rows[Math.abs(hash(seed)) % rows.length];
-  return normalizeBridgeListing(row);
+  const listing = pickBridgeListing(rows.map(normalizeBridgeListing), seed);
+  return hydrateBridgeListingPhotos(listing, dataset);
+}
+
+function pickBridgeListing(listings, seed) {
+  const usefulListings = listings.filter((listing) => listing?.photo1 || listing?.photosCount > 0);
+  const pool = usefulListings.length ? usefulListings : listings.filter((listing) => listing?.listingId);
+  return pool.length ? pick(pool, seed) : null;
 }
 
 function normalizeBridgeListing(row) {
-  const media = Array.isArray(row.Media)
-    ? row.Media
-    : Array.isArray(row.media)
-      ? row.media
-      : Array.isArray(row.Photos)
-        ? row.Photos
-        : [];
+  const media = bridgeMediaItems(row);
   const mediaUrls = media
-    .map((item) => firstValue(item.MediaURL, item.MediaURLFull, item.MediaUrl, item.Url, item.uri, item.url))
+    .map(mediaUrl)
     .filter(Boolean)
     .slice(0, 3);
 
@@ -205,13 +211,16 @@ function normalizeBridgeListing(row) {
     ? short(String(remarks).replace(/\s+/g, ' '), 'South Florida Residence', 42)
     : `${city || 'South Florida'} Residence`;
 
-  return {
+  const listing = {
+    listingId: firstValue(row.ListingId, row.ListingID, row.MlsNumber),
+    listingKey: firstValue(row.ListingKey, row.ResourceRecordKey, row.ListingKeyNumeric),
+    photosCount: Number(firstValue(row.PhotosCount, row.PhotoCount, row.MediaCount, mediaUrls.length)) || 0,
     address,
     city,
     state,
     price: money(firstValue(row.ListPrice, row.CurrentPrice, row.OriginalListPrice)),
     beds: firstValue(row.BedroomsTotal, row.BedsTotal, row.Bedrooms, '3'),
-    baths: firstValue(row.BathroomsTotalInteger, row.BathroomsFull, row.BathsTotal, row.BathsTotalInteger, '2'),
+    baths: firstValue(row.BathroomsTotalDecimal, row.BathroomsTotalInteger, row.BathroomsFull, row.BathsTotal, row.BathsTotalInteger, '2'),
     sqft: firstValue(row.LivingArea, row.BuildingAreaTotal, row.LotSizeSquareFeet),
     headline,
     remarks,
@@ -220,6 +229,151 @@ function normalizeBridgeListing(row) {
     photo3: mediaUrls[2] || mediaUrls[0],
     propertyType: firstValue(row.PropertyType, row.PropertySubType),
   };
+
+  return listing;
+}
+
+async function hydrateBridgeListingPhotos(listing, dataset) {
+  if (!listing || listing.photo1) return listing;
+
+  const retsUrls = await fetchBridgeRetsPhotoUrls({ dataset, listingId: listing.listingId });
+  listing.photo1 = retsUrls[0] || '';
+  listing.photo2 = retsUrls[1] || retsUrls[0] || '';
+  listing.photo3 = retsUrls[2] || retsUrls[0] || '';
+  return listing;
+}
+
+function bridgeMediaItems(row) {
+  const candidates = [
+    row.Media,
+    row.media,
+    row.Photos,
+    row.photos,
+    row.Images,
+    row.images,
+    row.Media?.value,
+    row.Media?.results,
+    row._embedded?.media,
+    row._embedded?.Media,
+  ];
+  return candidates.find(Array.isArray) || [];
+}
+
+function mediaUrl(item) {
+  if (!item || typeof item !== 'object') return '';
+  return firstValue(
+    item.MediaURL,
+    item.ResizeMediaURL,
+    item.MediaURLFull,
+    item.MediaURLLarge,
+    item.MediaURLMedium,
+    item.MediaUrl,
+    item.Url,
+    item.URI,
+    item.uri,
+    item.url,
+    item.href,
+    item.Link,
+    item.link,
+  );
+}
+
+function parseDigestChallenge(header) {
+  const values = {};
+  const challenge = String(header || '').replace(/^Digest\s+/i, '');
+  for (const part of challenge.match(/(?:[^,"]|"[^"]*")+/g) || []) {
+    const [rawKey, ...rawValue] = part.trim().split('=');
+    if (!rawKey || !rawValue.length) continue;
+    values[rawKey] = rawValue.join('=').replace(/^"|"$/g, '');
+  }
+  return values;
+}
+
+function digestAuthHeader({ challenge, method, uri, username, password, nc = '00000001' }) {
+  const realm = challenge.realm;
+  const nonce = challenge.nonce;
+  const qop = (challenge.qop || 'auth').split(',')[0].trim();
+  const algorithm = challenge.algorithm || 'MD5';
+  const cnonce = md5(`${Date.now()}:${username}:${uri}`).slice(0, 16);
+  const ha1 = md5(`${username}:${realm}:${password}`);
+  const ha2 = md5(`${method}:${uri}`);
+  const response = md5(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`);
+
+  return [
+    `Digest username="${username}"`,
+    `realm="${realm}"`,
+    `nonce="${nonce}"`,
+    `uri="${uri}"`,
+    `algorithm=${algorithm}`,
+    `response="${response}"`,
+    `qop=${qop}`,
+    `nc=${nc}`,
+    `cnonce="${cnonce}"`,
+  ].join(', ');
+}
+
+async function fetchWithDigest(url, { username, password, cookie } = {}) {
+  const target = new URL(url);
+  const first = await fetch(target, {
+    headers: {
+      Accept: '*/*',
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+  });
+
+  if (first.status !== 401 || !username || !password) return first;
+
+  const challenge = parseDigestChallenge(first.headers.get('www-authenticate'));
+  const auth = digestAuthHeader({
+    challenge,
+    method: 'GET',
+    uri: `${target.pathname}${target.search}`,
+    username,
+    password,
+  });
+
+  return fetch(target, {
+    headers: {
+      Accept: '*/*',
+      Authorization: auth,
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+  });
+}
+
+async function fetchBridgeRetsPhotoUrls({ dataset, listingId }) {
+  const username = cleanSecret(process.env.BRIDGE_CLIENT_ID);
+  const password = cleanSecret(process.env.BRIDGE_CLIENT_SECRET);
+  if (!username || !password || !dataset || !listingId) return [];
+
+  const bridgeBase = (process.env.BRIDGE_NATIVE_API_BASE || 'https://api.bridgedataoutput.com/api/v2').replace(/\/$/, '');
+  const loginUrl = `${bridgeBase}/rets/${dataset}/login`;
+
+  try {
+    const login = await fetchWithDigest(loginUrl, { username, password });
+    if (!login.ok) throw new Error(`Bridge RETS login HTTP ${login.status}: ${(await login.text()).slice(0, 300)}`);
+
+    const setCookie = login.headers.get('set-cookie') || '';
+    const cookie = setCookie.split(';')[0];
+    if (!cookie) throw new Error('Bridge RETS login did not return a session cookie');
+
+    const objectUrl = new URL(`${bridgeBase}/rets/${dataset}/getObject`);
+    objectUrl.searchParams.set('Resource', 'Property');
+    objectUrl.searchParams.set('Type', 'Photo');
+    objectUrl.searchParams.set('ID', `${listingId}:*`);
+    objectUrl.searchParams.set('Location', '1');
+
+    const photos = await fetch(objectUrl, { headers: { Cookie: cookie, Accept: '*/*' } });
+    const text = await photos.text();
+    if (!photos.ok) throw new Error(`Bridge RETS photos HTTP ${photos.status}: ${text.slice(0, 300)}`);
+
+    return [...text.matchAll(/^Location:\s*(https?:\/\/\S+)/gim)]
+      .map((match) => match[1].trim())
+      .slice(0, 3);
+  } catch (error) {
+    console.warn(`Bridge RETS photo lookup failed for ${listingId}; continuing without MLS photos. ${error.message}`);
+    return [];
+  }
 }
 
 function buildImage(type, listing, seed) {
@@ -354,7 +508,10 @@ async function main() {
     } catch (error) {
       console.warn(`Bridge listing lookup failed; falling back to market post. ${error.message}`);
     }
-    if (!listing?.photo1) type = 'market';
+    if (!listing?.photo1) {
+      type = 'market';
+      listing = null;
+    }
   }
 
   const imageUrl = buildImage(type, listing, seed);
