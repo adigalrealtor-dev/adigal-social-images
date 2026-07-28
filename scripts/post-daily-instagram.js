@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 
 const BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app').replace(/\/$/, '');
 const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
+const DESTINATIONS = cleanSecret(process.env.POST_DESTINATIONS || 'instagram,facebook')
+  .toLowerCase()
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
 
 const IG_ACCOUNT_LABEL = 'Adi Gal | הנדלניסטית | Real Estate';
 const HEADSHOTS = [
@@ -732,6 +737,7 @@ async function main() {
   console.log(JSON.stringify({
     dry_run: DRY_RUN,
     type,
+    destinations: DESTINATIONS,
     instagram_account: IG_ACCOUNT_LABEL,
     image_url: imageUrls[0],
     image_count: imageUrls.length,
@@ -741,8 +747,8 @@ async function main() {
   }, null, 2));
 
   if (DRY_RUN) return;
-  const instagram = await publishInstagram(imageUrls, caption);
-  const facebook = await publishFacebook(imageUrls, caption);
+  const instagram = DESTINATIONS.includes('instagram') ? await publishInstagram(imageUrls, caption) : null;
+  const facebook = DESTINATIONS.includes('facebook') ? await publishFacebook(imageUrls, caption) : null;
   console.log(JSON.stringify({ published: true, instagram, facebook }, null, 2));
 }
 

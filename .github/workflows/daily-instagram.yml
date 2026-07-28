@@ -19,6 +19,11 @@ on:
         required: true
         default: true
         type: boolean
+      destinations:
+        description: 'Optional: instagram, facebook, or instagram,facebook'
+        required: false
+        default: 'instagram,facebook'
+        type: string
 
 jobs:
   post:
@@ -55,4 +60,5 @@ jobs:
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app' }}
           POST_TYPE: ${{ inputs.post_type || (github.event.schedule == '30 12 * * *' && 'market') || (github.event.schedule == '0 15 * * *' && 'mortgage') || (github.event.schedule == '30 19 * * *' && 'listing') || 'market' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          POST_DESTINATIONS: ${{ inputs.destinations || 'instagram,facebook' }}
         run: node scripts/post-daily-instagram.js
