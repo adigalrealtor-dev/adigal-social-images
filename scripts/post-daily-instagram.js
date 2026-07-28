@@ -124,6 +124,27 @@ function postTypeFor(date = new Date()) {
   return 'market';
 }
 
+function newYorkParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+}
+
+function seedForRun(type, date = new Date()) {
+  if (process.env.POST_SEED) return process.env.POST_SEED;
+  const parts = newYorkParts(date);
+  const localDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const slot = process.env.POST_SLOT || `${parts.hour}${parts.minute}`;
+  return `${localDate}-${type}-${slot}`;
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
@@ -713,8 +734,8 @@ async function publishFacebook(imageUrls, caption) {
 
 async function main() {
   const now = new Date();
-  const seed = process.env.POST_SEED || now.toISOString().slice(0, 10);
   let type = postTypeFor(now);
+  const seed = seedForRun(type, now);
   let listing = null;
   let researchContext = '';
 
@@ -737,6 +758,7 @@ async function main() {
   console.log(JSON.stringify({
     dry_run: DRY_RUN,
     type,
+    seed,
     destinations: DESTINATIONS,
     instagram_account: IG_ACCOUNT_LABEL,
     image_url: imageUrls[0],

@@ -59,6 +59,7 @@ jobs:
           META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app' }}
           POST_TYPE: ${{ inputs.post_type || (github.event.schedule == '30 12 * * *' && 'market') || (github.event.schedule == '0 15 * * *' && 'mortgage') || (github.event.schedule == '30 19 * * *' && 'listing') || 'market' }}
+          POST_SLOT: ${{ (github.event.schedule == '30 12 * * *' && '0830') || (github.event.schedule == '0 15 * * *' && '1100') || (github.event.schedule == '30 19 * * *' && '1530') || '' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           POST_DESTINATIONS: ${{ inputs.destinations || 'instagram,facebook' }}
         run: node scripts/post-daily-instagram.js
