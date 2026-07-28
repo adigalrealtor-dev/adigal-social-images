@@ -97,7 +97,7 @@ function selectListingPhotoUrls(urls, listing) {
 
   const start = isCondoLike(listing) && cleanUrls.length >= 9 ? 6 : 0;
   const preferred = cleanUrls.slice(start).concat(cleanUrls.slice(0, start));
-  return preferred.slice(0, 3);
+  return preferred.slice(0, 10);
 }
 
 function buildListingHeadline(row, { city, propertySubType, propertyType }) {
@@ -105,10 +105,6 @@ function buildListingHeadline(row, { city, propertySubType, propertyType }) {
   const type = firstValue(propertySubType, propertyType, 'Residence');
   const normalizedType = /condo|condominium|apartment|unit/i.test(String(type)) ? 'Condo' : type;
   const area = normalizedType === 'Condo' ? firstValue(city, subdivision, 'South Florida') : firstValue(subdivision, city, 'South Florida');
-
-  if (String(row.PublicRemarks || '').match(/updated|renovated|remodeled/i)) {
-    return short(`Updated ${area} ${normalizedType}`, `${area} ${normalizedType}`, 34);
-  }
 
   return short(`${area} ${normalizedType}`, 'South Florida Residence', 34);
 }
@@ -316,7 +312,7 @@ function normalizeBridgeListing(row) {
   const mediaUrls = media
     .map(mediaUrl)
     .filter(Boolean)
-    .slice(0, 3);
+    .slice(0, 12);
 
   const city = firstValue(row.City, row.CityRegion);
   const state = firstValue(row.StateOrProvince, row.State, 'FL');
@@ -344,6 +340,7 @@ function normalizeBridgeListing(row) {
   };
 
   const selectedMediaUrls = selectListingPhotoUrls(mediaUrls, listing);
+  listing.photoUrls = selectedMediaUrls;
   listing.photo1 = selectedMediaUrls[0] || '';
   listing.photo2 = selectedMediaUrls[1] || selectedMediaUrls[0] || '';
   listing.photo3 = selectedMediaUrls[2] || selectedMediaUrls[0] || '';
@@ -356,6 +353,7 @@ async function hydrateBridgeListingPhotos(listing, dataset) {
 
   const retsUrls = await fetchBridgeRetsPhotoUrls({ dataset, listingId: listing.listingId });
   const selectedUrls = selectListingPhotoUrls(retsUrls, listing);
+  listing.photoUrls = selectedUrls;
   listing.photo1 = selectedUrls[0] || '';
   listing.photo2 = selectedUrls[1] || selectedUrls[0] || '';
   listing.photo3 = selectedUrls[2] || selectedUrls[0] || '';
@@ -543,6 +541,16 @@ function buildImage(type, listing, seed, researchContext = '') {
   });
 }
 
+function buildPostImageUrls(type, listing, seed, researchContext = '') {
+  const heroImage = buildImage(type, listing, seed, researchContext);
+  if (type !== 'listing' || !listing?.photoUrls?.length) return [heroImage];
+
+  const propertyPhotos = listing.photoUrls
+    .filter((url) => url && url !== listing.photo1)
+    .slice(0, 9);
+  return [heroImage, ...propertyPhotos];
+}
+
 async function makeCaption(type, listing, researchContext = '') {
   if (process.env.CAPTION_TEXT) return process.env.CAPTION_TEXT;
   if (DRY_RUN && !process.env.ANTHROPIC_API_KEY) {
@@ -606,21 +614,45 @@ async function makeCaption(type, listing, researchContext = '') {
   return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
 }
 
-async function publishInstagram(imageUrl, caption) {
+async function createInstagramMediaContainer({ graphBase, igUserId, token, imageUrl, caption, carouselItem = false }) {
+  const createUrl = new URL(`${graphBase}/${igUserId}/media`);
+  createUrl.searchParams.set('image_url', imageUrl);
+  createUrl.searchParams.set('access_token', token);
+  if (caption) createUrl.searchParams.set('caption', caption);
+  if (carouselItem) createUrl.searchParams.set('is_carousel_item', 'true');
+  const container = await fetchJson(createUrl, { method: 'POST' });
+  if (!container.id) throw new Error(`Meta did not return a media container id: ${JSON.stringify(container)}`);
+  return container.id;
+}
+
+async function publishInstagram(imageUrls, caption) {
   const igUserId = required('META_IG_USER_ID');
   const token = required('META_ACCESS_TOKEN');
   const graphVersion = process.env.META_GRAPH_VERSION || 'v20.0';
   const graphBase = `https://graph.facebook.com/${graphVersion}`;
+  const images = Array.isArray(imageUrls) ? imageUrls.filter(Boolean).slice(0, 10) : [imageUrls].filter(Boolean);
 
-  const createUrl = new URL(`${graphBase}/${igUserId}/media`);
-  createUrl.searchParams.set('image_url', imageUrl);
-  createUrl.searchParams.set('caption', caption);
-  createUrl.searchParams.set('access_token', token);
-  const container = await fetchJson(createUrl, { method: 'POST' });
-  if (!container.id) throw new Error(`Meta did not return a media container id: ${JSON.stringify(container)}`);
+  let creationId;
+  if (images.length > 1) {
+    const childIds = [];
+    for (const imageUrl of images) {
+      childIds.push(await createInstagramMediaContainer({ graphBase, igUserId, token, imageUrl, carouselItem: true }));
+    }
+
+    const createCarouselUrl = new URL(`${graphBase}/${igUserId}/media`);
+    createCarouselUrl.searchParams.set('media_type', 'CAROUSEL');
+    createCarouselUrl.searchParams.set('children', childIds.join(','));
+    createCarouselUrl.searchParams.set('caption', caption);
+    createCarouselUrl.searchParams.set('access_token', token);
+    const carousel = await fetchJson(createCarouselUrl, { method: 'POST' });
+    if (!carousel.id) throw new Error(`Meta did not return a carousel container id: ${JSON.stringify(carousel)}`);
+    creationId = carousel.id;
+  } else {
+    creationId = await createInstagramMediaContainer({ graphBase, igUserId, token, imageUrl: images[0], caption });
+  }
 
   const publishUrl = new URL(`${graphBase}/${igUserId}/media_publish`);
-  publishUrl.searchParams.set('creation_id', container.id);
+  publishUrl.searchParams.set('creation_id', creationId);
   publishUrl.searchParams.set('access_token', token);
 
   let lastError;
@@ -637,6 +669,41 @@ async function publishInstagram(imageUrl, caption) {
   }
 
   throw lastError;
+}
+
+async function publishFacebook(imageUrls, caption) {
+  const pageId = cleanSecret(process.env.META_FB_PAGE_ID);
+  const token = cleanSecret(process.env.META_FB_PAGE_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN);
+  if (!pageId || !token) return null;
+
+  const graphVersion = process.env.META_GRAPH_VERSION || 'v20.0';
+  const graphBase = `https://graph.facebook.com/${graphVersion}`;
+  const images = (Array.isArray(imageUrls) ? imageUrls : [imageUrls]).filter(Boolean).slice(0, 10);
+  if (!images.length) return null;
+
+  if (images.length === 1) {
+    const photoUrl = new URL(`${graphBase}/${pageId}/photos`);
+    photoUrl.searchParams.set('url', images[0]);
+    photoUrl.searchParams.set('caption', caption);
+    photoUrl.searchParams.set('access_token', token);
+    return fetchJson(photoUrl, { method: 'POST' });
+  }
+
+  const attached = [];
+  for (const imageUrl of images) {
+    const photoUrl = new URL(`${graphBase}/${pageId}/photos`);
+    photoUrl.searchParams.set('url', imageUrl);
+    photoUrl.searchParams.set('published', 'false');
+    photoUrl.searchParams.set('access_token', token);
+    const photo = await fetchJson(photoUrl, { method: 'POST' });
+    if (photo.id) attached.push({ media_fbid: photo.id });
+  }
+
+  const feedUrl = new URL(`${graphBase}/${pageId}/feed`);
+  feedUrl.searchParams.set('message', caption);
+  feedUrl.searchParams.set('attached_media', JSON.stringify(attached));
+  feedUrl.searchParams.set('access_token', token);
+  return fetchJson(feedUrl, { method: 'POST' });
 }
 
 async function main() {
@@ -659,21 +726,24 @@ async function main() {
   }
 
   researchContext = await fetchResearchContext(type);
-  const imageUrl = buildImage(type, listing, seed, researchContext);
+  const imageUrls = buildPostImageUrls(type, listing, seed, researchContext);
   const caption = await makeCaption(type, listing, researchContext);
 
   console.log(JSON.stringify({
     dry_run: DRY_RUN,
     type,
     instagram_account: IG_ACCOUNT_LABEL,
-    image_url: imageUrl,
+    image_url: imageUrls[0],
+    image_count: imageUrls.length,
+    image_urls: imageUrls,
     research_preview: researchContext.slice(0, 300),
     caption_preview: caption.slice(0, 300),
   }, null, 2));
 
   if (DRY_RUN) return;
-  const result = await publishInstagram(imageUrl, caption);
-  console.log(JSON.stringify({ published: true, result }, null, 2));
+  const instagram = await publishInstagram(imageUrls, caption);
+  const facebook = await publishFacebook(imageUrls, caption);
+  console.log(JSON.stringify({ published: true, instagram, facebook }, null, 2));
 }
 
 main().catch((error) => {
