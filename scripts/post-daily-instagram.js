@@ -46,6 +46,14 @@ function firstValue(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== '') || '';
 }
 
+function cleanSecret(value) {
+  return String(value || '').trim().replace(/^["']|["']$/g, '').trim();
+}
+
+function cleanBridgeToken(value) {
+  return cleanSecret(value).replace(/^Bearer\s+/i, '').trim();
+}
+
 function buildUrl(path, params) {
   const url = new URL(path, BASE_URL);
   for (const [key, value] of Object.entries(params)) {
@@ -93,8 +101,8 @@ async function availableAnthropicModels(apiKey) {
 }
 
 async function fetchBridgeListing(seed) {
-  const token = process.env.BRIDGE_ACCESS_TOKEN;
-  const dataset = process.env.BRIDGE_DATASET_ID;
+  const token = cleanBridgeToken(process.env.BRIDGE_ACCESS_TOKEN);
+  const dataset = cleanSecret(process.env.BRIDGE_DATASET_ID).replace(/^\/+|\/+$/g, '');
   if (!token || !dataset) return null;
 
   try {
@@ -105,9 +113,9 @@ async function fetchBridgeListing(seed) {
   }
 }
 
-function bridgeAuth(url, token) {
+function bridgeAuth(url, token, mode) {
   const headers = { Accept: 'application/json' };
-  if ((process.env.BRIDGE_AUTH_MODE || 'query').toLowerCase() === 'bearer') {
+  if (mode === 'bearer') {
     headers.Authorization = `Bearer ${token}`;
   } else {
     url.searchParams.set('access_token', token);
@@ -115,22 +123,42 @@ function bridgeAuth(url, token) {
   return headers;
 }
 
+async function fetchBridgeJson(makeUrl) {
+  const mode = (process.env.BRIDGE_AUTH_MODE || 'auto').toLowerCase();
+  const modes = mode === 'bearer' || mode === 'query' ? [mode] : ['query', 'bearer'];
+  let lastError;
+
+  for (const authMode of modes) {
+    const url = makeUrl();
+    const headers = bridgeAuth(url, cleanBridgeToken(process.env.BRIDGE_ACCESS_TOKEN), authMode);
+    try {
+      return await fetchJson(url, { headers });
+    } catch (error) {
+      lastError = error;
+      if (!String(error.message).includes('HTTP 401')) throw error;
+      console.warn(`Bridge ${authMode} auth failed; ${authMode === modes[modes.length - 1] ? 'no auth modes left' : 'trying next auth mode'}. ${error.message}`);
+    }
+  }
+
+  throw lastError;
+}
+
 async function fetchBridgeODataListing({ token, dataset, seed }) {
   const bridgeBase = (process.env.BRIDGE_API_BASE || 'https://api.bridgedataoutput.com/api/v2/OData').replace(/\/$/, '');
-  const url = new URL(`${bridgeBase}/${dataset}/Property`);
-  url.searchParams.set('$top', process.env.BRIDGE_TOP || '12');
-  url.searchParams.set('$orderby', process.env.BRIDGE_ORDER_BY || 'ModificationTimestamp desc');
-  url.searchParams.set('$expand', 'Media');
+  const data = await fetchBridgeJson(() => {
+    const url = new URL(`${bridgeBase}/${dataset}/Property`);
+    url.searchParams.set('$top', process.env.BRIDGE_TOP || '12');
+    url.searchParams.set('$orderby', process.env.BRIDGE_ORDER_BY || 'ModificationTimestamp desc');
+    url.searchParams.set('$expand', 'Media');
 
-  const agentId = process.env.BRIDGE_AGENT_ID;
-  const defaultFilter = agentId
-    ? `StandardStatus eq 'Active' and (ListAgentMlsId eq '${agentId}' or BuyerAgentMlsId eq '${agentId}')`
-    : "StandardStatus eq 'Active'";
-  const filter = process.env.BRIDGE_FILTER || defaultFilter;
-  if (filter) url.searchParams.set('$filter', filter);
-
-  const headers = bridgeAuth(url, token);
-  const data = await fetchJson(url, { headers });
+    const agentId = cleanSecret(process.env.BRIDGE_AGENT_ID);
+    const defaultFilter = agentId
+      ? `StandardStatus eq 'Active' and (ListAgentMlsId eq '${agentId}' or BuyerAgentMlsId eq '${agentId}')`
+      : "StandardStatus eq 'Active'";
+    const filter = process.env.BRIDGE_FILTER || defaultFilter;
+    if (filter) url.searchParams.set('$filter', filter);
+    return url;
+  });
   const rows = data.value || data.d?.results || [];
   if (!rows.length) return null;
 
@@ -140,15 +168,15 @@ async function fetchBridgeODataListing({ token, dataset, seed }) {
 
 async function fetchBridgeNativeListing({ token, dataset, seed }) {
   const bridgeBase = (process.env.BRIDGE_NATIVE_API_BASE || 'https://api.bridgedataoutput.com/api/v2').replace(/\/$/, '');
-  const url = new URL(`${bridgeBase}/${dataset}/listings`);
-  url.searchParams.set('limit', process.env.BRIDGE_TOP || '12');
-  url.searchParams.set('sortBy', process.env.BRIDGE_NATIVE_SORT_BY || 'ModificationTimestamp');
-  url.searchParams.set('order', process.env.BRIDGE_NATIVE_ORDER || 'desc');
-  url.searchParams.set('StandardStatus', process.env.BRIDGE_STATUS || 'Active');
-  if (process.env.BRIDGE_AGENT_ID) url.searchParams.set('ListAgentMlsId', process.env.BRIDGE_AGENT_ID);
-
-  const headers = bridgeAuth(url, token);
-  const data = await fetchJson(url, { headers });
+  const data = await fetchBridgeJson(() => {
+    const url = new URL(`${bridgeBase}/${dataset}/listings`);
+    url.searchParams.set('limit', process.env.BRIDGE_TOP || '12');
+    url.searchParams.set('sortBy', process.env.BRIDGE_NATIVE_SORT_BY || 'ModificationTimestamp');
+    url.searchParams.set('order', process.env.BRIDGE_NATIVE_ORDER || 'desc');
+    url.searchParams.set('StandardStatus', process.env.BRIDGE_STATUS || 'Active');
+    if (cleanSecret(process.env.BRIDGE_AGENT_ID)) url.searchParams.set('ListAgentMlsId', cleanSecret(process.env.BRIDGE_AGENT_ID));
+    return url;
+  });
   const rows = data.bundle || data.value || data.records || data.listings || data.data || [];
   if (!rows.length) return null;
 
