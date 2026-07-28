@@ -68,11 +68,27 @@ function buildUrl(path, params) {
   return url.toString();
 }
 
+function researchHeadline(researchContext, fallback) {
+  const line = String(researchContext || '').split('\n').find(Boolean);
+  if (!line) return fallback;
+  return short(
+    line
+      .replace(/^\d+\.\s*/, '')
+      .replace(/\s+\([^()]+\)\s+-\s+.+$/, '')
+      .replace(/\s+-\s+.+$/, ''),
+    fallback,
+    64,
+  );
+}
+
 function postTypeFor(date = new Date()) {
   const forced = (process.env.POST_TYPE || '').toLowerCase();
   if (['listing', 'market', 'mortgage'].includes(forced)) return forced;
-  const rotation = ['market', 'listing', 'mortgage'];
-  return rotation[date.getUTCDate() % rotation.length];
+
+  const utcHour = date.getUTCHours();
+  if (utcHour === 15) return 'mortgage';
+  if (utcHour === 19) return 'listing';
+  return 'market';
 }
 
 async function fetchJson(url, options = {}) {
@@ -82,6 +98,69 @@ async function fetchJson(url, options = {}) {
     throw new Error(`HTTP ${response.status} from ${url}: ${text.slice(0, 500)}`);
   }
   return text ? JSON.parse(text) : {};
+}
+
+async function fetchText(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} from ${url}: ${text.slice(0, 500)}`);
+  }
+  return text;
+}
+
+function decodeXml(value) {
+  return String(value || '')
+    .replace(/<!\[CDATA\[|\]\]>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function rssItems(xml, limit = 6) {
+  return [...String(xml || '').matchAll(/<item\b[\s\S]*?<\/item>/gi)]
+    .map((match) => {
+      const item = match[0];
+      const field = (name) => decodeXml(item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'))?.[1]);
+      return {
+        title: field('title'),
+        source: field('source'),
+        date: field('pubDate'),
+        summary: field('description'),
+      };
+    })
+    .filter((item) => item.title)
+    .slice(0, limit);
+}
+
+async function fetchResearchContext(type) {
+  if (type === 'listing') return '';
+
+  const query = type === 'mortgage'
+    ? 'mortgage rates today buy vs rent housing market'
+    : 'Miami South Florida real estate market condo market Airbnb investment';
+  const url = new URL('https://news.google.com/rss/search');
+  url.searchParams.set('q', query);
+  url.searchParams.set('hl', 'en-US');
+  url.searchParams.set('gl', 'US');
+  url.searchParams.set('ceid', 'US:en');
+
+  try {
+    const xml = await fetchText(url);
+    const items = rssItems(xml);
+    if (!items.length) return '';
+    return items
+      .map((item, index) => `${index + 1}. ${item.title}${item.source ? ` (${item.source})` : ''}${item.date ? ` - ${item.date}` : ''}`)
+      .join('\n');
+  } catch (error) {
+    console.warn(`Research lookup failed for ${type}; continuing with general context. ${error.message}`);
+    return '';
+  }
 }
 
 function anthropicHeaders(apiKey) {
@@ -376,7 +455,7 @@ async function fetchBridgeRetsPhotoUrls({ dataset, listingId }) {
   }
 }
 
-function buildImage(type, listing, seed) {
+function buildImage(type, listing, seed, researchContext = '') {
   const theme = pick(THEMES, seed);
   const headshot = pick(HEADSHOTS, seed);
 
@@ -400,9 +479,9 @@ function buildImage(type, listing, seed) {
 
   if (type === 'mortgage') {
     return buildUrl('/api/mortgage', {
-      rate: process.env.MORTGAGE_RATE || '6.7%',
-      headline_en: process.env.MORTGAGE_HEADLINE_EN || 'Rates held steady this week',
-      headline_he: process.env.MORTGAGE_HEADLINE_HE || 'הריבית נשארה יציבה השבוע',
+      rate: process.env.MORTGAGE_RATE || 'Today',
+      headline_en: process.env.MORTGAGE_HEADLINE_EN || researchHeadline(researchContext, 'Mortgage Market Update'),
+      headline_he: process.env.MORTGAGE_HEADLINE_HE || 'עדכון משכנתאות יומי',
       theme,
       headshot,
       v: seed,
@@ -410,7 +489,7 @@ function buildImage(type, listing, seed) {
   }
 
   return buildUrl('/api/market', {
-    headline: process.env.MARKET_HEADLINE || 'South Florida Market Pulse',
+    headline: process.env.MARKET_HEADLINE || researchHeadline(researchContext, 'South Florida Market Pulse'),
     sub: process.env.MARKET_SUB || 'A quick look at what buyers and sellers should watch this week.',
     stat1_num: process.env.MARKET_STAT1_NUM || '2.1 mo',
     stat1_label: process.env.MARKET_STAT1_LABEL || 'Inventory',
@@ -424,7 +503,7 @@ function buildImage(type, listing, seed) {
   });
 }
 
-async function makeCaption(type, listing) {
+async function makeCaption(type, listing, researchContext = '') {
   if (process.env.CAPTION_TEXT) return process.env.CAPTION_TEXT;
   if (DRY_RUN && !process.env.ANTHROPIC_API_KEY) {
     return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
@@ -437,9 +516,12 @@ async function makeCaption(type, listing) {
     'Avoid emoji unless it is genuinely useful.',
     'Keep it under 1,300 characters.',
     'Include a short CTA to DM or call Adi.',
-    'Include 5-9 relevant hashtags.',
-    'If Hebrew is useful, include one short Hebrew line after the English.',
+    'Write the main caption in English, then add one natural Hebrew line.',
+    'Include 7-12 relevant hashtags focused on Miami real estate, South Florida real estate, buying, selling, investing, listings, and mortgages when relevant.',
     `Post type: ${type}.`,
+    type === 'market' ? 'Use the research context to choose a timely topic such as seller market, buyer market, condo market, Airbnb investment, inventory, prices, or South Florida demand.' : '',
+    type === 'mortgage' ? 'Use the research context to discuss mortgage rates, buy vs rent, affordability, refinancing, or investing for the future.' : '',
+    researchContext ? `Fresh research context:\n${researchContext.slice(0, 1800)}` : '',
     listing ? `Listing context: ${JSON.stringify(listing).slice(0, 1800)}` : '',
   ].filter(Boolean).join('\n');
 
@@ -507,6 +589,7 @@ async function main() {
   const seed = process.env.POST_SEED || now.toISOString().slice(0, 10);
   let type = postTypeFor(now);
   let listing = null;
+  let researchContext = '';
 
   if (type === 'listing') {
     try {
@@ -520,14 +603,16 @@ async function main() {
     }
   }
 
-  const imageUrl = buildImage(type, listing, seed);
-  const caption = await makeCaption(type, listing);
+  researchContext = await fetchResearchContext(type);
+  const imageUrl = buildImage(type, listing, seed, researchContext);
+  const caption = await makeCaption(type, listing, researchContext);
 
   console.log(JSON.stringify({
     dry_run: DRY_RUN,
     type,
     instagram_account: IG_ACCOUNT_LABEL,
     image_url: imageUrl,
+    research_preview: researchContext.slice(0, 300),
     caption_preview: caption.slice(0, 300),
   }, null, 2));
 

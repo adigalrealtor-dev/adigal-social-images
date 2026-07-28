@@ -2,8 +2,12 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # 8:30 AM America/New_York during daylight saving time.
+    # Market/news post: 8:30 AM America/New_York during daylight saving time.
     - cron: '30 12 * * *'
+    # Mortgage post: 11:00 AM America/New_York during daylight saving time.
+    - cron: '0 15 * * *'
+    # MLS listing post: 3:30 PM America/New_York during daylight saving time.
+    - cron: '30 19 * * *'
   workflow_dispatch:
     inputs:
       post_type:
@@ -47,6 +51,6 @@ jobs:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://adigal-social-images.vercel.app' }}
-          POST_TYPE: ${{ inputs.post_type }}
+          POST_TYPE: ${{ inputs.post_type || (github.event.schedule == '30 12 * * *' && 'market') || (github.event.schedule == '0 15 * * *' && 'mortgage') || (github.event.schedule == '30 19 * * *' && 'listing') || 'market' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
         run: node scripts/post-daily-instagram.js
