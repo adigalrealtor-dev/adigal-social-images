@@ -81,6 +81,38 @@ function researchHeadline(researchContext, fallback) {
   );
 }
 
+function isCondoLike(listing) {
+  const text = [
+    listing?.address,
+    listing?.propertyType,
+    listing?.propertySubType,
+    listing?.remarks,
+  ].join(' ').toLowerCase();
+  return /condo|apartment|unit|#|apt|co-op|coop|townhouse/.test(text);
+}
+
+function selectListingPhotoUrls(urls, listing) {
+  const cleanUrls = [...new Set((urls || []).filter(Boolean))];
+  if (!cleanUrls.length) return [];
+
+  const start = isCondoLike(listing) && cleanUrls.length >= 9 ? 6 : 0;
+  const preferred = cleanUrls.slice(start).concat(cleanUrls.slice(0, start));
+  return preferred.slice(0, 3);
+}
+
+function buildListingHeadline(row, { city, propertySubType, propertyType }) {
+  const subdivision = short(firstValue(row.SubdivisionName, row.MIAMIRE_SubdivisionInformation), '', 24);
+  const type = firstValue(propertySubType, propertyType, 'Residence');
+  const normalizedType = /condo|condominium|apartment|unit/i.test(String(type)) ? 'Condo' : type;
+  const area = normalizedType === 'Condo' ? firstValue(city, subdivision, 'South Florida') : firstValue(subdivision, city, 'South Florida');
+
+  if (String(row.PublicRemarks || '').match(/updated|renovated|remodeled/i)) {
+    return short(`Updated ${area} ${normalizedType}`, `${area} ${normalizedType}`, 34);
+  }
+
+  return short(`${area} ${normalizedType}`, 'South Florida Residence', 34);
+}
+
 function postTypeFor(date = new Date()) {
   const forced = (process.env.POST_TYPE || '').toLowerCase();
   if (['listing', 'market', 'mortgage'].includes(forced)) return forced;
@@ -98,6 +130,10 @@ async function fetchJson(url, options = {}) {
     throw new Error(`HTTP ${response.status} from ${url}: ${text.slice(0, 500)}`);
   }
   return text ? JSON.parse(text) : {};
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchText(url, options = {}) {
@@ -286,9 +322,9 @@ function normalizeBridgeListing(row) {
   const state = firstValue(row.StateOrProvince, row.State, 'FL');
   const address = firstValue(row.UnparsedAddress, [row.StreetNumber, row.StreetName, city, state].filter(Boolean).join(', '));
   const remarks = firstValue(row.PublicRemarks, row.Remarks, row.MarketingRemarks);
-  const headline = remarks
-    ? short(String(remarks).replace(/\s+/g, ' '), 'South Florida Residence', 42)
-    : `${city || 'South Florida'} Residence`;
+  const propertyType = firstValue(row.PropertyType, row.PropertySubType);
+  const propertySubType = firstValue(row.PropertySubType, row.PropertySubTypeAdditional);
+  const headline = buildListingHeadline(row, { city, propertySubType, propertyType });
 
   const listing = {
     listingId: firstValue(row.ListingId, row.ListingID, row.MlsNumber),
@@ -303,11 +339,14 @@ function normalizeBridgeListing(row) {
     sqft: firstValue(row.LivingArea, row.BuildingAreaTotal, row.LotSizeSquareFeet),
     headline,
     remarks,
-    photo1: mediaUrls[0],
-    photo2: mediaUrls[1] || mediaUrls[0],
-    photo3: mediaUrls[2] || mediaUrls[0],
-    propertyType: firstValue(row.PropertyType, row.PropertySubType),
+    propertyType,
+    propertySubType,
   };
+
+  const selectedMediaUrls = selectListingPhotoUrls(mediaUrls, listing);
+  listing.photo1 = selectedMediaUrls[0] || '';
+  listing.photo2 = selectedMediaUrls[1] || selectedMediaUrls[0] || '';
+  listing.photo3 = selectedMediaUrls[2] || selectedMediaUrls[0] || '';
 
   return listing;
 }
@@ -316,9 +355,10 @@ async function hydrateBridgeListingPhotos(listing, dataset) {
   if (!listing || listing.photo1) return listing;
 
   const retsUrls = await fetchBridgeRetsPhotoUrls({ dataset, listingId: listing.listingId });
-  listing.photo1 = retsUrls[0] || '';
-  listing.photo2 = retsUrls[1] || retsUrls[0] || '';
-  listing.photo3 = retsUrls[2] || retsUrls[0] || '';
+  const selectedUrls = selectListingPhotoUrls(retsUrls, listing);
+  listing.photo1 = selectedUrls[0] || '';
+  listing.photo2 = selectedUrls[1] || selectedUrls[0] || '';
+  listing.photo3 = selectedUrls[2] || selectedUrls[0] || '';
   return listing;
 }
 
@@ -448,7 +488,7 @@ async function fetchBridgeRetsPhotoUrls({ dataset, listingId }) {
 
     return [...text.matchAll(/^Location:\s*(https?:\/\/\S+)/gim)]
       .map((match) => match[1].trim())
-      .slice(0, 3);
+      .slice(0, 12);
   } catch (error) {
     console.warn(`Bridge RETS photo lookup failed for ${listingId}; continuing without MLS photos. ${error.message}`);
     return [];
@@ -512,6 +552,7 @@ async function makeCaption(type, listing, researchContext = '') {
   const apiKey = required('ANTHROPIC_API_KEY');
   const prompt = [
     'Write an Instagram caption for Adi Gal, a South Florida real estate broker.',
+    'Return only the final caption text. Do not include labels, headings, or markdown section names.',
     'Tone: polished, clear, helpful, not hypey.',
     'Avoid emoji unless it is genuinely useful.',
     'Keep it under 1,300 characters.',
@@ -581,7 +622,21 @@ async function publishInstagram(imageUrl, caption) {
   const publishUrl = new URL(`${graphBase}/${igUserId}/media_publish`);
   publishUrl.searchParams.set('creation_id', container.id);
   publishUrl.searchParams.set('access_token', token);
-  return fetchJson(publishUrl, { method: 'POST' });
+
+  let lastError;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    try {
+      return await fetchJson(publishUrl, { method: 'POST' });
+    } catch (error) {
+      lastError = error;
+      const message = String(error.message || '');
+      if (!message.includes('Media ID is not available') && !message.includes('not ready for publishing')) throw error;
+      console.warn(`Meta media is not ready yet; retrying publish attempt ${attempt}/6.`);
+      await sleep(5000 * attempt);
+    }
+  }
+
+  throw lastError;
 }
 
 async function main() {

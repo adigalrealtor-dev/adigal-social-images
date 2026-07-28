@@ -73,6 +73,12 @@ function textFit(value, maxLength) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
 }
 
+function responsiveFont(text, base, longAt, min) {
+  const length = String(text || '').length;
+  if (length <= longAt) return base;
+  return Math.max(min, base - Math.ceil((length - longAt) / 3));
+}
+
 function hashText(text) {
   return String(text || '').split('').reduce((sum, ch) => (sum + ch.charCodeAt(0)) % 997, 0);
 }
@@ -129,7 +135,7 @@ export default async function handler(req) {
   const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
   const headshotUrl = pickHeadshot(req, q);
 
-  const address = textFit(q.get('address') || '4521 Bayshore Drive, Miami, FL', 58);
+  const address = textFit(q.get('address') || '4521 Bayshore Drive, Miami, FL', 52);
   const price = textFit(q.get('price') || '$2,150,000', 16);
   const beds = textFit(q.get('beds') || '5', 4);
   const baths = textFit(q.get('baths') || '4', 4);
@@ -139,9 +145,12 @@ export default async function handler(req) {
   const handle = q.get('handle') || '@adigalrealtor';
   const agentName = q.get('agent_name') || 'Adi Gal';
   const tagLabel = q.get('tag_label') || 'FOR SALE';
-  const headline = textFit(q.get('headline') || q.get('title') || 'Luxury South Florida Residence', 42);
+  const headline = textFit(q.get('headline') || q.get('title') || 'Luxury South Florida Residence', 36);
   const variant = pickVariant(q, `${address}${headline}${price}`);
   const isHero = variant === 'hero';
+  const addressSize = responsiveFont(address, 18, 38, 14);
+  const headlineSize = responsiveFont(headline, 40, 24, 30);
+  const priceSize = responsiveFont(price, 60, 12, 48);
 
   const allText = [
     address, price, beds, baths, sqft, phone, email, handle, agentName, tagLabel, headline,
@@ -224,9 +233,9 @@ export default async function handler(req) {
         flexDirection: 'column',
       },
     },
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 18, letterSpacing: 0, display: 'flex' } }, address.toUpperCase()),
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 42, lineHeight: 1.04, display: 'flex', marginTop: 10 } }, headline),
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 64, lineHeight: 1, display: 'flex', marginTop: 12 } }, price),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: addressSize, letterSpacing: 0, display: 'flex', lineHeight: 1.12 } }, address.toUpperCase()),
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: headlineSize, lineHeight: 1.02, display: 'flex', marginTop: 10 } }, headline),
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: priceSize, lineHeight: 1, display: 'flex', marginTop: 10 } }, price),
       el('div', { style: { display: 'flex', gap: 20, marginTop: 18 } },
         feature(beds, 'BD', theme),
         feature(baths, 'BA', theme),
