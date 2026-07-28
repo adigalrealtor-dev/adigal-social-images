@@ -579,7 +579,8 @@ function buildPostImageUrls(type, listing, seed, researchContext = '') {
 
 async function makeCaption(type, listing, researchContext = '') {
   if (process.env.CAPTION_TEXT) return process.env.CAPTION_TEXT;
-  if (DRY_RUN && !process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn('ANTHROPIC_API_KEY is missing; using fallback caption.');
     return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
   }
 
@@ -769,17 +770,32 @@ async function main() {
   }, null, 2));
 
   if (DRY_RUN) return;
-  const instagram = DESTINATIONS.includes('instagram') ? await publishInstagram(imageUrls, caption) : null;
+  let instagram = null;
+  if (DESTINATIONS.includes('instagram')) {
+    try {
+      instagram = await publishInstagram(imageUrls, caption);
+    } catch (error) {
+      instagram = { error: String(error.message || error).slice(0, 500) };
+      console.warn(`Instagram publish failed. ${instagram.error}`);
+    }
+  }
+
   let facebook = null;
   if (DESTINATIONS.includes('facebook')) {
     try {
       facebook = await publishFacebook(imageUrls, caption);
     } catch (error) {
-      if (!DESTINATIONS.includes('instagram')) throw error;
       facebook = { error: String(error.message || error).slice(0, 500) };
-      console.warn(`Facebook publish failed after Instagram publish succeeded. ${facebook.error}`);
+      console.warn(`Facebook publish failed. ${facebook.error}`);
     }
   }
+
+  const attempted = [instagram, facebook].filter((result) => result !== null);
+  const published = attempted.some((result) => result && !result.error);
+  if (attempted.length && !published) {
+    throw new Error(`All requested publish destinations failed. Instagram: ${instagram?.error || 'not requested'} Facebook: ${facebook?.error || 'not requested'}`);
+  }
+
   console.log(JSON.stringify({ published: true, instagram, facebook }, null, 2));
 }
 
