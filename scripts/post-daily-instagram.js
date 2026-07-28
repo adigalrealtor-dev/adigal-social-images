@@ -748,7 +748,16 @@ async function main() {
 
   if (DRY_RUN) return;
   const instagram = DESTINATIONS.includes('instagram') ? await publishInstagram(imageUrls, caption) : null;
-  const facebook = DESTINATIONS.includes('facebook') ? await publishFacebook(imageUrls, caption) : null;
+  let facebook = null;
+  if (DESTINATIONS.includes('facebook')) {
+    try {
+      facebook = await publishFacebook(imageUrls, caption);
+    } catch (error) {
+      if (!DESTINATIONS.includes('instagram')) throw error;
+      facebook = { error: String(error.message || error).slice(0, 500) };
+      console.warn(`Facebook publish failed after Instagram publish succeeded. ${facebook.error}`);
+    }
+  }
   console.log(JSON.stringify({ published: true, instagram, facebook }, null, 2));
 }
 
