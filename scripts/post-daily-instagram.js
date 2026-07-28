@@ -66,6 +66,28 @@ async function fetchJson(url, options = {}) {
   return text ? JSON.parse(text) : {};
 }
 
+function anthropicHeaders(apiKey) {
+  return {
+    'content-type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+}
+
+async function availableAnthropicModels(apiKey) {
+  try {
+    const data = await fetchJson('https://api.anthropic.com/v1/models?limit=100', {
+      headers: anthropicHeaders(apiKey),
+    });
+    const ids = (data.data || []).map((model) => model.id).filter(Boolean);
+    const preferred = ids.filter((id) => /haiku/i.test(id)).concat(ids.filter((id) => /sonnet/i.test(id)));
+    return [...new Set(preferred.length ? preferred : ids)];
+  } catch (error) {
+    console.warn(`Could not list Anthropic models; using built-in fallbacks. ${error.message}`);
+    return [];
+  }
+}
+
 async function fetchBridgeListing(seed) {
   const token = process.env.BRIDGE_ACCESS_TOKEN;
   const dataset = process.env.BRIDGE_DATASET_ID;
@@ -190,21 +212,22 @@ async function makeCaption(type, listing) {
 
   const models = [
     process.env.ANTHROPIC_MODEL,
+    'claude-3-5-haiku-20241022',
+    'claude-3-7-sonnet-20250219',
+    'claude-sonnet-4-20250514',
     'claude-3-5-sonnet-latest',
     'claude-3-5-haiku-latest',
     'claude-3-5-sonnet-20241022',
     'claude-3-haiku-20240307',
   ].filter(Boolean);
 
-  for (const model of models) {
+  const modelCandidates = [...new Set(models.concat(await availableAnthropicModels(apiKey)))];
+
+  for (const model of modelCandidates) {
     try {
       const data = await fetchJson('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
+        headers: anthropicHeaders(apiKey),
         body: JSON.stringify({
           model,
           max_tokens: 500,
