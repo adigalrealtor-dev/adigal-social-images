@@ -108,8 +108,15 @@ function selectListingPhotoUrls(urls, listing) {
 function buildListingHeadline(row, { city, propertySubType, propertyType }) {
   const subdivision = short(firstValue(row.SubdivisionName, row.MIAMIRE_SubdivisionInformation), '', 24);
   const type = firstValue(propertySubType, propertyType, 'Residence');
-  const normalizedType = /condo|condominium|apartment|unit/i.test(String(type)) ? 'Condo' : type;
-  const area = normalizedType === 'Condo' ? firstValue(city, subdivision, 'South Florida') : firstValue(subdivision, city, 'South Florida');
+  const typeText = [type, propertyType, propertySubType, subdivision].join(' ');
+  const normalizedType = /condo|condominium|apartment|unit/i.test(typeText)
+    ? 'Condo'
+    : /lease|rental/i.test(typeText)
+      ? 'Rental'
+      : short(type, 'Residence', 18);
+  const area = ['Condo', 'Rental'].includes(normalizedType)
+    ? firstValue(city, subdivision, 'South Florida')
+    : firstValue(subdivision, city, 'South Florida');
 
   return short(`${area} ${normalizedType}`, 'South Florida Residence', 34);
 }
@@ -143,6 +150,48 @@ function seedForRun(type, date = new Date()) {
   const localDate = `${parts.year}-${parts.month}-${parts.day}`;
   const slot = process.env.POST_SLOT || `${parts.hour}${parts.minute}`;
   return `${localDate}-${type}-${slot}`;
+}
+
+function mortgageContent(seed, researchContext = '') {
+  const topic = pick([
+    {
+      rate: 'Rate Check',
+      headlineEn: 'Buy vs. Rent Check-In',
+      headlineHe: 'לקנות או לשכור?',
+      caption: 'Mortgage watch: today is a good day to compare payment, rent, and long-term equity side by side. The right move depends on cash flow, timeline, and the property itself. DM Adi Gal to review your buying power in South Florida.\n\nבדיקה נכונה של משכנתא מתחילה במספרים ולא בתחושת בטן.\n\n#MiamiRealEstate #SouthFloridaRealEstate #MortgageMarket #BuyVsRent #HomeBuying #MiamiHomes #FloridaRealEstate #RealEstateInvesting',
+    },
+    {
+      rate: 'Payment Focus',
+      headlineEn: 'Monthly Payment Matters',
+      headlineHe: 'התשלום החודשי קובע',
+      caption: 'Mortgage watch: do not shop only by price. Monthly payment, insurance, HOA, taxes, and rate options are what decide whether a deal truly works. DM Adi Gal before you write the offer.\n\nלפני הצעה על נכס, חשוב להבין את כל התשלום החודשי.\n\n#MiamiRealEstate #MortgageTips #SouthFloridaHomes #HomeBuying #RealEstateBroker #MiamiCondos #FloridaHomes #BuyWithConfidence',
+    },
+    {
+      rate: 'Investor Lens',
+      headlineEn: 'Run the Numbers First',
+      headlineHe: 'בודקים מספרים לפני קנייה',
+      caption: 'Mortgage watch: investors should look beyond the rate and stress-test rent, reserves, vacancy, HOA, and exit strategy. A strong property can still be a weak deal if the financing does not fit. DM Adi Gal for a South Florida review.\n\nבהשקעה נכונה, המימון חייב להתאים לתכנית.\n\n#MiamiInvesting #RealEstateInvesting #MortgageMarket #SouthFloridaRealEstate #InvestmentProperty #MiamiRealEstate #RentalProperty #FloridaInvestors',
+    },
+    {
+      rate: 'Buyer Strategy',
+      headlineEn: 'Pre-Approval Before Touring',
+      headlineHe: 'אישור עקרוני לפני סיור',
+      caption: 'Mortgage watch: serious buyers should refresh pre-approval before touring. It helps you move faster, negotiate cleaner, and avoid surprises once the right South Florida property appears. DM Adi Gal to get prepared.\n\nקונה מוכן יכול לפעול מהר כשהנכס הנכון מופיע.\n\n#MiamiHomes #HomeBuyerTips #MortgagePreapproval #SouthFloridaRealEstate #MiamiRealEstate #BuyAHome #RealEstateBroker #FloridaProperty',
+    },
+  ], seed);
+
+  return {
+    ...topic,
+    researchHeadline: researchHeadline(researchContext, topic.headlineEn),
+  };
+}
+
+function fallbackCaption(type, listing, seed, researchContext = '') {
+  if (type === 'mortgage') return mortgageContent(seed, researchContext).caption;
+  if (type === 'listing' && listing) {
+    return `${listing.headline || 'South Florida listing'}: ${listing.address || 'new property available'} listed at ${listing.price || 'today'}${listing.beds ? ` with ${listing.beds} beds` : ''}${listing.baths ? ` and ${listing.baths} baths` : ''}. DM Adi Gal for details or to schedule a showing.\n\nלפרטים נוספים או לתיאום סיור, שלחו הודעה לאדי גל.\n\n#MiamiRealEstate #SouthFloridaRealEstate #MiamiListings #HomeForSale #RealEstateBroker #BuySellInvest #FloridaRealEstate`;
+  }
+  return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
 }
 
 async function fetchJson(url, options = {}) {
@@ -548,10 +597,11 @@ function buildImage(type, listing, seed, researchContext = '') {
   }
 
   if (type === 'mortgage') {
+    const mortgage = mortgageContent(seed, researchContext);
     return buildUrl('/api/mortgage', {
-      rate: process.env.MORTGAGE_RATE || 'Today',
-      headline_en: process.env.MORTGAGE_HEADLINE_EN || researchHeadline(researchContext, 'Mortgage Market Update'),
-      headline_he: process.env.MORTGAGE_HEADLINE_HE || 'עדכון משכנתאות יומי',
+      rate: process.env.MORTGAGE_RATE || mortgage.rate,
+      headline_en: process.env.MORTGAGE_HEADLINE_EN || mortgage.headlineEn,
+      headline_he: process.env.MORTGAGE_HEADLINE_HE || mortgage.headlineHe,
       theme,
       headshot,
       v: seed,
@@ -583,11 +633,11 @@ function buildPostImageUrls(type, listing, seed, researchContext = '') {
   return [heroImage, ...propertyPhotos];
 }
 
-async function makeCaption(type, listing, researchContext = '') {
+async function makeCaption(type, listing, seed, researchContext = '') {
   if (process.env.CAPTION_TEXT) return process.env.CAPTION_TEXT;
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('ANTHROPIC_API_KEY is missing; using fallback caption.');
-    return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
+    return fallbackCaption(type, listing, seed, researchContext);
   }
 
   const apiKey = required('ANTHROPIC_API_KEY');
@@ -644,7 +694,7 @@ async function makeCaption(type, listing, researchContext = '') {
     }
   }
 
-  return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
+  return fallbackCaption(type, listing, seed, researchContext);
 }
 
 async function createInstagramMediaContainer({ graphBase, igUserId, token, imageUrl, caption, carouselItem = false }) {
@@ -777,7 +827,7 @@ async function main() {
 
   researchContext = await fetchResearchContext(type);
   const imageUrls = buildPostImageUrls(type, listing, seed, researchContext);
-  const caption = await makeCaption(type, listing, researchContext);
+  const caption = await makeCaption(type, listing, seed, researchContext);
 
   console.log(JSON.stringify({
     dry_run: DRY_RUN,
