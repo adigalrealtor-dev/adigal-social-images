@@ -112,7 +112,7 @@ Add these GitHub repository secrets before enabling the workflow:
 
 Optional secrets:
 
-- `ANTHROPIC_MODEL` defaults to `claude-sonnet-4-20250514`
+- `ANTHROPIC_MODEL` is optional; the script tries `claude-3-5-sonnet-latest`, then `claude-3-5-haiku-latest`
 - `BRIDGE_API_BASE` defaults to `https://api.bridgedataoutput.com/api/v2/OData`
 - `BRIDGE_AUTH_MODE` defaults to `query`; set to `bearer` if your Bridge token expects an Authorization header
 - `BRIDGE_FILTER` defaults to `StandardStatus eq 'Active'`

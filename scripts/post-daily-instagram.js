@@ -188,22 +188,36 @@ async function makeCaption(type, listing) {
     listing ? `Listing context: ${JSON.stringify(listing).slice(0, 1800)}` : '',
   ].filter(Boolean).join('\n');
 
-  const data = await fetchJson('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-      max_tokens: 500,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+  const models = [
+    process.env.ANTHROPIC_MODEL,
+    'claude-3-5-sonnet-latest',
+    'claude-3-5-haiku-latest',
+  ].filter(Boolean);
 
-  return data.content?.map((part) => part.text || '').join('').trim()
-    || 'South Florida real estate update. DM Adi Gal for details.';
+  for (const model of models) {
+    try {
+      const data = await fetchJson('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 500,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      const caption = data.content?.map((part) => part.text || '').join('').trim();
+      if (caption) return caption;
+    } catch (error) {
+      console.warn(`Anthropic caption attempt failed with ${model}; trying fallback. ${error.message}`);
+    }
+  }
+
+  return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
 }
 
 async function publishInstagram(imageUrl, caption) {
