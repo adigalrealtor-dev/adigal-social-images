@@ -149,7 +149,7 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${url}: ${text.slice(0, 500)}`);
+    throw new Error(`HTTP ${response.status}: ${text.slice(0, 1200)} from ${redactUrl(url)}`);
   }
   return text ? JSON.parse(text) : {};
 }
@@ -162,9 +162,15 @@ async function fetchText(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${url}: ${text.slice(0, 500)}`);
+    throw new Error(`HTTP ${response.status}: ${text.slice(0, 1200)} from ${redactUrl(url)}`);
   }
   return text;
+}
+
+function redactUrl(url) {
+  const safeUrl = new URL(String(url));
+  if (safeUrl.searchParams.has('access_token')) safeUrl.searchParams.set('access_token', '***');
+  return safeUrl.toString();
 }
 
 function decodeXml(value) {
@@ -775,7 +781,7 @@ async function main() {
     try {
       instagram = await publishInstagram(imageUrls, caption);
     } catch (error) {
-      instagram = { error: String(error.message || error).slice(0, 500) };
+      instagram = { error: String(error.message || error).slice(0, 1200) };
       console.warn(`Instagram publish failed. ${instagram.error}`);
     }
   }
@@ -785,7 +791,7 @@ async function main() {
     try {
       facebook = await publishFacebook(imageUrls, caption);
     } catch (error) {
-      facebook = { error: String(error.message || error).slice(0, 500) };
+      facebook = { error: String(error.message || error).slice(0, 1200) };
       console.warn(`Facebook publish failed. ${facebook.error}`);
     }
   }
