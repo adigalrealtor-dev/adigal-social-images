@@ -232,7 +232,11 @@ async function main() {
   let listing = null;
 
   if (type === 'listing') {
-    listing = await fetchBridgeListing(seed);
+    try {
+      listing = await fetchBridgeListing(seed);
+    } catch (error) {
+      console.warn(`Bridge listing lookup failed; falling back to market post. ${error.message}`);
+    }
     if (!listing?.photo1) type = 'market';
   }
 
