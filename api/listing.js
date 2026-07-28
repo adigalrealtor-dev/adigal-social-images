@@ -51,6 +51,8 @@ function asset(req, path) {
 function pickHeadshot(req, q) {
   const direct = q.get('headshot_url');
   if (direct) return direct;
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-white-office';
+  if (requested.toLowerCase() === 'none') return null;
   const allowed = new Set([
     'adi-white-suit',
     'adi-black-blazer',
@@ -62,7 +64,6 @@ function pickHeadshot(req, q) {
     'adi-green-blazer',
     'adi-gray-blazer',
   ]);
-  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-white-office';
   const slug = allowed.has(requested) ? requested : 'adi-white-office';
   return asset(req, `/headshots/${slug}.png`);
 }
@@ -70,6 +71,17 @@ function pickHeadshot(req, q) {
 function textFit(value, maxLength) {
   const text = String(value || '').trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
+}
+
+function hashText(text) {
+  return String(text || '').split('').reduce((sum, ch) => (sum + ch.charCodeAt(0)) % 997, 0);
+}
+
+function pickVariant(q, fallbackSeed) {
+  const requested = (q.get('variant') || q.get('layout') || '').toLowerCase();
+  if (requested === 'hero' || requested === 'collage') return requested;
+  const seed = q.get('v') || q.get('seed') || fallbackSeed;
+  return hashText(seed) % 2 === 0 ? 'collage' : 'hero';
 }
 
 function img(src, style) {
@@ -128,6 +140,8 @@ export default async function handler(req) {
   const agentName = q.get('agent_name') || 'Adi Gal';
   const tagLabel = q.get('tag_label') || 'FOR SALE';
   const headline = textFit(q.get('headline') || q.get('title') || 'Luxury South Florida Residence', 42);
+  const variant = pickVariant(q, `${address}${headline}${price}`);
+  const isHero = variant === 'hero';
 
   const allText = [
     address, price, beds, baths, sqft, phone, email, handle, agentName, tagLabel, headline,
@@ -150,6 +164,12 @@ export default async function handler(req) {
     interBold && { name: 'Inter', data: interBold, weight: 800, style: 'normal' },
   ].filter(Boolean);
 
+  const photoTiles = isHero ? [] : [
+    img(photo2, { top: 500, left: 0, width: 360, height: 190, borderTop: `6px solid ${WHITE}`, borderRight: `6px solid ${WHITE}` }),
+    img(photo3, { top: 500, left: 360, width: 360, height: 190, borderTop: `6px solid ${WHITE}`, borderRight: `6px solid ${WHITE}` }),
+  ];
+  const contentWidth = headshotUrl ? 610 : 972;
+
   const tree = el('div', {
     style: {
       width: 1080,
@@ -160,16 +180,15 @@ export default async function handler(req) {
       overflow: 'hidden',
     },
   },
-    img(photo1, { top: 0, left: 0, width: 1080, height: 500 }),
-    img(photo2, { top: 500, left: 0, width: 360, height: 190, borderTop: `6px solid ${WHITE}`, borderRight: `6px solid ${WHITE}` }),
-    img(photo3, { top: 500, left: 360, width: 360, height: 190, borderTop: `6px solid ${WHITE}`, borderRight: `6px solid ${WHITE}` }),
+    img(photo1, { top: 0, left: 0, width: 1080, height: isHero ? 620 : 500 }),
+    ...photoTiles,
     el('div', { style: { position: 'absolute', top: 0, left: 0, width: 360, height: 150, display: 'flex', background: 'linear-gradient(100deg, rgba(255,253,248,0.96), rgba(255,253,248,0.72), rgba(255,253,248,0))' } }),
     el('img', { src: logoUrl, style: { position: 'absolute', top: 28, left: 42, width: 170, height: 95, objectFit: 'contain' } }),
 
     el('div', {
       style: {
         position: 'absolute',
-        top: 448,
+        top: isHero ? 522 : 448,
         left: 0,
         width: 650,
         height: 96,
@@ -181,12 +200,12 @@ export default async function handler(req) {
         paddingLeft: 54,
       },
     },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 66, letterSpacing: 2, display: 'flex' } }, tagLabel.toUpperCase())),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: WHITE, fontSize: 38, letterSpacing: 0, lineHeight: 1, display: 'flex' } }, tagLabel.toUpperCase())),
 
     el('div', {
       style: {
         position: 'absolute',
-        top: 690,
+        top: isHero ? 620 : 690,
         left: 0,
         right: 0,
         bottom: 90,
@@ -198,14 +217,14 @@ export default async function handler(req) {
     el('div', {
       style: {
         position: 'absolute',
-        top: 712,
+        top: isHero ? 646 : 712,
         left: 54,
-        width: 610,
+        width: contentWidth,
         display: 'flex',
         flexDirection: 'column',
       },
     },
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 18, letterSpacing: 3, display: 'flex' } }, address.toUpperCase()),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 18, letterSpacing: 0, display: 'flex' } }, address.toUpperCase()),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 42, lineHeight: 1.04, display: 'flex', marginTop: 10 } }, headline),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 64, lineHeight: 1, display: 'flex', marginTop: 12 } }, price),
       el('div', { style: { display: 'flex', gap: 20, marginTop: 18 } },
@@ -213,8 +232,10 @@ export default async function handler(req) {
         feature(baths, 'BA', theme),
         feature(sqft, 'SF', theme))),
 
-    el('div', { style: { position: 'absolute', right: 0, bottom: 90, width: 330, height: 390, backgroundColor: 'rgba(255,253,248,0.52)', display: 'flex' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: 0, bottom: 82, width: 330, height: 430, objectFit: 'contain' } }),
+    ...(headshotUrl ? [
+      el('div', { style: { position: 'absolute', right: 0, bottom: 90, width: 330, height: 390, backgroundColor: 'rgba(255,253,248,0.52)', display: 'flex' } }),
+      el('img', { src: headshotUrl, style: { position: 'absolute', right: 0, bottom: 82, width: 330, height: 430, objectFit: 'contain' } }),
+    ] : []),
 
     el('div', {
       style: {
@@ -232,7 +253,7 @@ export default async function handler(req) {
       },
     },
       el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 18, display: 'flex' } }, 'CALL NOW'),
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 46, letterSpacing: 2, display: 'flex' } }, phone),
+      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 46, letterSpacing: 0, display: 'flex' } }, phone),
       el('div', { style: { width: 2, height: 46, backgroundColor: 'rgba(200,160,82,0.55)', display: 'flex' } }),
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
         el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 17, display: 'flex' } }, email),

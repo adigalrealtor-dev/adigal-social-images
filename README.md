@@ -21,6 +21,7 @@ there's no native binary to bundle or memory/timeout tuning required.
    - `api/`
    - `public/logo.jpg`
    - `public/headshot.jpg`
+   - `public/headshots/`
 3. Vercel will auto-redeploy on the push. Wait ~1 minute, then test:
    - `https://adigal-social-images.vercel.app/api/market`
    - `https://adigal-social-images.vercel.app/api/mortgage`
@@ -50,6 +51,16 @@ Use these on any endpoint to reduce repetition:
 - `theme=commercial`
 - `theme=warm`
 
+Use `v=...` or `seed=...` on any endpoint to rotate the layout automatically. In Zapier, the
+best option is to append `&v={{zap_meta_timestamp}}` so each generated post can land on a different
+layout without changing the rest of the Zap.
+
+You can also force a specific layout:
+
+- Listing: `variant=collage` or `variant=hero`
+- Market: `variant=right` or `variant=left`
+- Mortgage: `variant=right` or `variant=left`
+
 For listing posts, `property_type` can also pick a theme automatically:
 
 - `property_type=waterfront` or `property_type=beach` -> coastal
@@ -67,6 +78,9 @@ Use these transparent Adi cutouts with `headshot=...`:
 - `adi-gray-blazer`
 - `adi-pointing`
 - `adi-street-black`
+
+If one cutout looks wrong on a specific post, use `headshot=none` to remove Adi from that image,
+or use `headshot_url=...` to supply a different transparent PNG.
 
 Example:
 

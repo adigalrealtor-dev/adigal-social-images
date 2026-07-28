@@ -42,6 +42,8 @@ const asset = (req, path) => new URL(path, req.url).toString();
 function pickHeadshot(req, q) {
   const direct = q.get('headshot_url');
   if (direct) return direct;
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-green-blazer';
+  if (requested.toLowerCase() === 'none') return null;
   const allowed = new Set([
     'adi-white-suit',
     'adi-black-blazer',
@@ -53,7 +55,6 @@ function pickHeadshot(req, q) {
     'adi-green-blazer',
     'adi-gray-blazer',
   ]);
-  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-green-blazer';
   const slug = allowed.has(requested) ? requested : 'adi-green-blazer';
   return asset(req, `/headshots/${slug}.png`);
 }
@@ -61,6 +62,17 @@ const short = (value, max) => {
   const text = String(value || '').trim();
   return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
 };
+
+function hashText(text) {
+  return String(text || '').split('').reduce((sum, ch) => (sum + ch.charCodeAt(0)) % 997, 0);
+}
+
+function pickVariant(q, fallbackSeed) {
+  const requested = (q.get('variant') || q.get('layout') || '').toLowerCase();
+  if (requested === 'right' || requested === 'left') return requested;
+  const seed = q.get('v') || q.get('seed') || fallbackSeed;
+  return hashText(seed) % 2 === 0 ? 'right' : 'left';
+}
 
 function statTile(num, label, colors) {
   return el('div', {
@@ -76,7 +88,7 @@ function statTile(num, label, colors) {
     },
   },
     el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: colors.gold, fontSize: 35, lineHeight: 1, display: 'flex' } }, short(num, 12)),
-    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: colors.white, fontSize: 12, letterSpacing: 1, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
+    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: colors.white, fontSize: 12, letterSpacing: 0, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
 }
 
 export default async function handler(req) {
@@ -97,8 +109,22 @@ export default async function handler(req) {
     [q.get('stat2_num') || '38 days', q.get('stat2_label') || 'Avg. time on market'],
     [q.get('stat3_num') || '+4.2%', q.get('stat3_label') || 'Median price YoY'],
   ];
+  const variant = pickVariant(q, `${headline}${sub}${stats.flat().join('')}`);
+  const headshotLeft = variant === 'left';
+  const portraitPanelStyle = headshotLeft
+    ? { left: 0, borderRight: `5px solid ${GOLD}` }
+    : { right: 0, borderLeft: `5px solid ${GOLD}` };
+  const portraitStyle = headshotLeft
+    ? { left: 18 }
+    : { right: 18 };
+  const contentLeft = headshotUrl && headshotLeft ? 372 : 54;
+  const contentWidth = headshotUrl ? 650 : 972;
+  const headshotNodes = headshotUrl ? [
+    el('div', { style: { position: 'absolute', top: 526, bottom: 90, width: 318, backgroundColor: 'rgba(7,31,54,0.94)', display: 'flex', ...portraitPanelStyle } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', bottom: 90, width: 288, height: 400, objectFit: 'contain', ...portraitStyle } }),
+  ] : [];
 
-  const allText = [headline, sub, agentName, phone, handle, stats.flat().join(' '), 'Market Pulse South Florida Real Estate'].join(' ');
+  const allText = [headline, sub, agentName, phone, handle, stats.flat().join(' '), 'MARKET PULSE Market Pulse South Florida Real Estate'].join(' ');
   const [playfairBold, playfairBlack, interReg, interSemi, interBold] = await Promise.all([
     loadGoogleFont('Playfair Display', 700, allText),
     loadGoogleFont('Playfair Display', 900, allText),
@@ -121,12 +147,11 @@ export default async function handler(req) {
     el('img', { src: logoUrl, style: { position: 'absolute', top: 26, left: 42, width: 172, height: 92, objectFit: 'contain' } }),
 
     el('div', { style: { position: 'absolute', top: 400, left: 0, right: 0, height: 126, backgroundColor: RED, borderTop: `5px solid ${GOLD}`, borderBottom: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', paddingLeft: 54 } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 62, letterSpacing: 1, display: 'flex' } }, 'MARKET PULSE')),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: WHITE, fontSize: 38, letterSpacing: 0, lineHeight: 1, display: 'flex' } }, 'MARKET PULSE')),
 
     el('div', { style: { position: 'absolute', top: 526, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 526, right: 0, bottom: 90, width: 318, backgroundColor: 'rgba(7,31,54,0.94)', borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: 18, bottom: 90, width: 288, height: 400, objectFit: 'contain' } }),
-    el('div', { style: { position: 'absolute', top: 560, left: 54, width: 650, display: 'flex', flexDirection: 'column' } },
+    ...headshotNodes,
+    el('div', { style: { position: 'absolute', top: 560, left: contentLeft, width: contentWidth, display: 'flex', flexDirection: 'column' } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 56, lineHeight: 1.04, display: 'flex' } }, headline),
       el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: '#4F6070', fontSize: 21, lineHeight: 1.32, display: 'flex', marginTop: 16 } }, sub),
       el('div', { style: { display: 'flex', gap: 16, marginTop: 26, flexWrap: 'wrap' } }, ...stats.map(([num, label]) => statTile(num, label, theme)))),

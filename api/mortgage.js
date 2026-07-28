@@ -42,6 +42,8 @@ const asset = (req, path) => new URL(path, req.url).toString();
 function pickHeadshot(req, q) {
   const direct = q.get('headshot_url');
   if (direct) return direct;
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-pointing';
+  if (requested.toLowerCase() === 'none') return null;
   const allowed = new Set([
     'adi-white-suit',
     'adi-black-blazer',
@@ -53,7 +55,6 @@ function pickHeadshot(req, q) {
     'adi-green-blazer',
     'adi-gray-blazer',
   ]);
-  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-pointing';
   const slug = allowed.has(requested) ? requested : 'adi-pointing';
   return asset(req, `/headshots/${slug}.png`);
 }
@@ -61,6 +62,17 @@ const short = (value, max) => {
   const text = String(value || '').trim();
   return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
 };
+
+function hashText(text) {
+  return String(text || '').split('').reduce((sum, ch) => (sum + ch.charCodeAt(0)) % 997, 0);
+}
+
+function pickVariant(q, fallbackSeed) {
+  const requested = (q.get('variant') || q.get('layout') || '').toLowerCase();
+  if (requested === 'right' || requested === 'left') return requested;
+  const seed = q.get('v') || q.get('seed') || fallbackSeed;
+  return hashText(seed) % 2 === 0 ? 'right' : 'left';
+}
 
 export default async function handler(req) {
   const { searchParams: q } = new URL(req.url);
@@ -76,6 +88,17 @@ export default async function handler(req) {
   const agentName = q.get('agent_name') || 'Adi Gal';
   const phone = q.get('phone') || '305-409-1305';
   const handle = q.get('handle') || '@adigalrealtor';
+  const variant = pickVariant(q, `${rate}${headlineEn}${headlineHe}`);
+  const headshotLeft = variant === 'left';
+  const portraitPanelStyle = headshotLeft
+    ? { left: 0, borderRight: `5px solid ${GOLD}` }
+    : { right: 0, borderLeft: `5px solid ${GOLD}` };
+  const portraitStyle = headshotLeft ? { left: 18 } : { right: 26 };
+  const contentLeft = headshotUrl && headshotLeft ? 398 : 54;
+  const headshotNodes = headshotUrl ? [
+    el('div', { style: { position: 'absolute', top: 452, bottom: 90, width: 340, backgroundColor: NAVY, display: 'flex', ...portraitPanelStyle } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', bottom: 106, width: 290, height: 430, objectFit: 'contain', ...portraitStyle } }),
+  ] : [];
 
   const latinText = [rate, headlineEn, agentName, phone, handle, 'Mortgage Watch 30 Year Fixed Average English Hebrew'].join(' ');
   const [playfairBold, playfairBlack, interReg, interSemi, interBold, hebrewFont] = await Promise.all([
@@ -102,13 +125,12 @@ export default async function handler(req) {
     el('img', { src: logoUrl, style: { position: 'absolute', top: 26, left: 42, width: 172, height: 92, objectFit: 'contain' } }),
 
     el('div', { style: { position: 'absolute', top: 348, left: 0, width: 700, height: 104, backgroundColor: RED, borderTop: `5px solid ${GOLD}`, borderBottom: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', paddingLeft: 54 } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 55, letterSpacing: 1, display: 'flex' } }, 'MORTGAGE WATCH')),
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: WHITE, fontSize: 38, letterSpacing: 0, lineHeight: 1, display: 'flex' } }, 'MORTGAGE WATCH')),
 
     el('div', { style: { position: 'absolute', top: 452, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 452, right: 0, bottom: 90, width: 340, backgroundColor: NAVY, borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: 26, bottom: 106, width: 290, height: 430, objectFit: 'contain' } }),
-    el('div', { style: { position: 'absolute', top: 502, left: 54, width: 610, display: 'flex', flexDirection: 'column' } },
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 19, letterSpacing: 4, display: 'flex' } }, '30-YEAR FIXED AVERAGE'),
+    ...headshotNodes,
+    el('div', { style: { position: 'absolute', top: 502, left: contentLeft, width: headshotUrl ? 610 : 972, display: 'flex', flexDirection: 'column' } },
+      el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 19, letterSpacing: 0, display: 'flex' } }, '30-YEAR FIXED AVERAGE'),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 132, lineHeight: 0.9, display: 'flex', marginTop: 10 } }, rate),
       el('div', { style: { width: 530, height: 2, backgroundColor: GOLD, display: 'flex', marginTop: 24, marginBottom: 24 } }),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 43, lineHeight: 1.08, display: 'flex' } }, headlineEn),
