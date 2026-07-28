@@ -63,6 +63,10 @@ const short = (value, max) => {
   return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
 };
 
+function rtlForOg(text) {
+  return String(text || '').split('').reverse().join('');
+}
+
 function hashText(text) {
   return String(text || '').split('').reduce((sum, ch) => (sum + ch.charCodeAt(0)) % 997, 0);
 }
@@ -82,6 +86,7 @@ export default async function handler(req) {
   const rate = short(q.get('rate') || '6.7%', 8);
   const headlineEn = short(q.get('headline_en') || 'Rates held steady this week', 54);
   const headlineHe = short(q.get('headline_he') || 'הריבית נשארה יציבה השבוע', 54);
+  const headlineHeOg = rtlForOg(headlineHe);
   const photoUrl = q.get('photo_url') || q.get('background_url') || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1400&h=900&fit=crop';
   const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
   const headshotUrl = pickHeadshot(req, q);
@@ -107,7 +112,7 @@ export default async function handler(req) {
     loadGoogleFont('Inter', 400, latinText),
     loadGoogleFont('Inter', 600, latinText),
     loadGoogleFont('Inter', 800, latinText),
-    loadGoogleFont('Noto Sans Hebrew', 600, headlineHe),
+    loadGoogleFont('Noto Sans Hebrew', 600, headlineHe + headlineHeOg),
   ]);
   const fonts = [
     playfairBold && { name: 'Playfair', data: playfairBold, weight: 700, style: 'normal' },
@@ -134,7 +139,7 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 132, lineHeight: 0.9, display: 'flex', marginTop: 10 } }, rate),
       el('div', { style: { width: 530, height: 2, backgroundColor: GOLD, display: 'flex', marginTop: 24, marginBottom: 24 } }),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 43, lineHeight: 1.08, display: 'flex' } }, headlineEn),
-      el('div', { style: { fontFamily: hebrewFont ? 'Noto Hebrew' : 'Inter', fontWeight: 600, color: '#425568', fontSize: 26, lineHeight: 1.28, direction: 'rtl', textAlign: 'right', display: 'flex', marginTop: 18, width: 570 } }, headlineHe)),
+      el('div', { style: { fontFamily: hebrewFont ? 'Noto Hebrew' : 'Inter', fontWeight: 600, color: '#425568', fontSize: 26, lineHeight: 1.28, direction: 'ltr', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', marginTop: 18, width: 570 } }, headlineHeOg)),
 
     el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: NAVY, borderTop: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', padding: '0 52px', gap: 26 } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 40, display: 'flex' } }, phone),
