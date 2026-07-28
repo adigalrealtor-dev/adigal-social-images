@@ -11,6 +11,18 @@ const CREAM = '#F6EFE2';
 const INK = '#10243B';
 const WHITE = '#FFFDF8';
 
+const THEMES = {
+  luxury: { navy: '#071F36', gold: '#C8A052', red: '#8F171C', cream: '#F6EFE2', ink: '#10243B', white: '#FFFDF8' },
+  coastal: { navy: '#073B4C', gold: '#D7A94B', red: '#0F6E73', cream: '#F3F0E8', ink: '#0B2D3D', white: '#FFFFFF' },
+  modern: { navy: '#16202A', gold: '#BFA46A', red: '#5B2333', cream: '#F4F1EA', ink: '#111827', white: '#FFFFFF' },
+  warm: { navy: '#1F2933', gold: '#C89A4B', red: '#9A3B24', cream: '#F7EFE4', ink: '#1C2630', white: '#FFFFFF' },
+};
+
+function pickTheme(q) {
+  const requested = (q.get('theme') || '').toLowerCase();
+  return THEMES[requested] || THEMES.modern;
+}
+
 async function loadGoogleFont(family, weight, text) {
   try {
     const css = await fetch(
@@ -27,6 +39,24 @@ async function loadGoogleFont(family, weight, text) {
 }
 
 const asset = (req, path) => new URL(path, req.url).toString();
+function pickHeadshot(req, q) {
+  const direct = q.get('headshot_url');
+  if (direct) return direct;
+  const allowed = new Set([
+    'adi-white-suit',
+    'adi-black-blazer',
+    'adi-pointing',
+    'adi-navy-seated',
+    'adi-black-standing',
+    'adi-street-black',
+    'adi-white-office',
+    'adi-green-blazer',
+    'adi-gray-blazer',
+  ]);
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-pointing';
+  const slug = allowed.has(requested) ? requested : 'adi-pointing';
+  return asset(req, `/headshots/${slug}.png`);
+}
 const short = (value, max) => {
   const text = String(value || '').trim();
   return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
@@ -34,13 +64,15 @@ const short = (value, max) => {
 
 export default async function handler(req) {
   const { searchParams: q } = new URL(req.url);
+  const theme = pickTheme(q);
+  const NAVY = theme.navy, GOLD = theme.gold, RED = theme.red, CREAM = theme.cream, INK = theme.ink, WHITE = theme.white;
 
   const rate = short(q.get('rate') || '6.7%', 8);
   const headlineEn = short(q.get('headline_en') || 'Rates held steady this week', 54);
-  const headlineHe = short(q.get('headline_he') || 'הריבית נשארה יציבה השבוע', 70);
+  const headlineHe = short(q.get('headline_he') || 'הריבית נשארה יציבה השבוע', 54);
   const photoUrl = q.get('photo_url') || q.get('background_url') || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1400&h=900&fit=crop';
   const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
-  const headshotUrl = q.get('headshot_url') || asset(req, '/headshot.jpg');
+  const headshotUrl = pickHeadshot(req, q);
   const agentName = q.get('agent_name') || 'Adi Gal';
   const phone = q.get('phone') || '305-409-1305';
   const handle = q.get('handle') || '@adigalrealtor';
@@ -73,18 +105,14 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 55, letterSpacing: 1, display: 'flex' } }, 'MORTGAGE WATCH')),
 
     el('div', { style: { position: 'absolute', top: 452, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 452, right: 0, bottom: 90, width: 356, backgroundColor: NAVY, borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 500, right: 52, width: 250, height: 250, borderRadius: 999, backgroundColor: WHITE, border: `5px solid ${GOLD}`, display: 'flex', overflow: 'hidden' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', top: 492, right: 38, width: 276, height: 340, objectFit: 'cover', objectPosition: '22% 42%' } }),
+    el('div', { style: { position: 'absolute', top: 452, right: 0, bottom: 90, width: 340, backgroundColor: NAVY, borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', right: 26, bottom: 106, width: 290, height: 430, objectFit: 'contain' } }),
     el('div', { style: { position: 'absolute', top: 502, left: 54, width: 610, display: 'flex', flexDirection: 'column' } },
       el('div', { style: { fontFamily: 'Inter', fontWeight: 800, color: GOLD, fontSize: 19, letterSpacing: 4, display: 'flex' } }, '30-YEAR FIXED AVERAGE'),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 132, lineHeight: 0.9, display: 'flex', marginTop: 10 } }, rate),
       el('div', { style: { width: 530, height: 2, backgroundColor: GOLD, display: 'flex', marginTop: 24, marginBottom: 24 } }),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 43, lineHeight: 1.08, display: 'flex' } }, headlineEn),
-      el('div', { style: { fontFamily: hebrewFont ? 'Noto Hebrew' : 'Inter', fontWeight: 600, color: '#425568', fontSize: 24, lineHeight: 1.25, direction: 'rtl', textAlign: 'right', display: 'flex', marginTop: 18, width: 570 } }, headlineHe)),
-    el('div', { style: { position: 'absolute', right: 52, bottom: 144, width: 250, display: 'flex', flexDirection: 'column', alignItems: 'center' } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 28, display: 'flex' } }, agentName),
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 13, letterSpacing: 1, display: 'flex', marginTop: 4 } }, 'REAL ESTATE + MORTGAGE')),
+      el('div', { style: { fontFamily: hebrewFont ? 'Noto Hebrew' : 'Inter', fontWeight: 600, color: '#425568', fontSize: 26, lineHeight: 1.28, direction: 'rtl', textAlign: 'right', display: 'flex', marginTop: 18, width: 570 } }, headlineHe)),
 
     el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: NAVY, borderTop: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', padding: '0 52px', gap: 26 } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 40, display: 'flex' } }, phone),

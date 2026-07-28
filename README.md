@@ -36,8 +36,41 @@ Each should render directly in the browser tab within a couple seconds.
 
 **Listing:** `/api/listing?photo_url=<main MLS photo URL>&photo2_url=<second MLS photo URL>&photo3_url=<third MLS photo URL>&address=...&headline=...&price=...&beds=5&baths=4&sqft=3,820&phone=305-409-1305&email=adigalrealtor@gmail.com&handle=@adigalrealtor&tag_label=FOR%20SALE`
 
-All params are optional. The deployed `public/logo.jpg` and `public/headshot.jpg` are used by
-default, but either can be overridden with `logo_url=...` or `headshot_url=...`.
+All params are optional. The deployed `public/logo.jpg` and transparent cutouts in
+`public/headshots/` are used by default. Logo and headshot can be overridden with
+`logo_url=...` or `headshot_url=...`.
+
+## Variation Params
+
+Use these on any endpoint to reduce repetition:
+
+- `theme=luxury`
+- `theme=coastal`
+- `theme=modern`
+- `theme=commercial`
+- `theme=warm`
+
+For listing posts, `property_type` can also pick a theme automatically:
+
+- `property_type=waterfront` or `property_type=beach` -> coastal
+- `property_type=condo` or `property_type=modern` -> modern
+- `property_type=commercial`, `business`, or `retail` -> commercial
+
+Use these transparent Adi cutouts with `headshot=...`:
+
+- `adi-white-suit`
+- `adi-white-office`
+- `adi-black-blazer`
+- `adi-black-standing`
+- `adi-green-blazer`
+- `adi-navy-seated`
+- `adi-gray-blazer`
+- `adi-pointing`
+- `adi-street-black`
+
+Example:
+
+`/api/listing?photo_url=...&price=...&theme=coastal&headshot=adi-white-office&v={{zap_meta_timestamp}}`
 
 ## Wiring into Zapier
 No change from the setup guide's Code by Zapier steps — same `image_url` construction pattern,

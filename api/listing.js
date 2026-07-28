@@ -12,6 +12,23 @@ const CREAM = '#F6EFE2';
 const INK = '#10243B';
 const WHITE = '#FFFDF8';
 
+const THEMES = {
+  luxury: { navy: '#071F36', gold: '#C8A052', red: '#8F171C', cream: '#F6EFE2', ink: '#10243B', white: '#FFFDF8' },
+  coastal: { navy: '#073B4C', gold: '#D7A94B', red: '#0F6E73', cream: '#F3F0E8', ink: '#0B2D3D', white: '#FFFFFF' },
+  modern: { navy: '#16202A', gold: '#BFA46A', red: '#5B2333', cream: '#F4F1EA', ink: '#111827', white: '#FFFFFF' },
+  commercial: { navy: '#071F36', gold: '#C8A052', red: '#8F171C', cream: '#F6EFE2', ink: '#10243B', white: '#FFFDF8' },
+  warm: { navy: '#1F2933', gold: '#C89A4B', red: '#9A3B24', cream: '#F7EFE4', ink: '#1C2630', white: '#FFFFFF' },
+};
+
+function pickTheme(q) {
+  const requested = (q.get('theme') || q.get('property_type') || '').toLowerCase();
+  if (requested.includes('coastal') || requested.includes('water') || requested.includes('beach')) return THEMES.coastal;
+  if (requested.includes('modern') || requested.includes('condo')) return THEMES.modern;
+  if (requested.includes('commercial') || requested.includes('business') || requested.includes('retail')) return THEMES.commercial;
+  if (requested.includes('warm') || requested.includes('mediterranean')) return THEMES.warm;
+  return THEMES[requested] || THEMES.luxury;
+}
+
 async function loadGoogleFont(family, weight, text) {
   try {
     const css = await fetch(
@@ -31,6 +48,25 @@ function asset(req, path) {
   return new URL(path, req.url).toString();
 }
 
+function pickHeadshot(req, q) {
+  const direct = q.get('headshot_url');
+  if (direct) return direct;
+  const allowed = new Set([
+    'adi-white-suit',
+    'adi-black-blazer',
+    'adi-pointing',
+    'adi-navy-seated',
+    'adi-black-standing',
+    'adi-street-black',
+    'adi-white-office',
+    'adi-green-blazer',
+    'adi-gray-blazer',
+  ]);
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-white-office';
+  const slug = allowed.has(requested) ? requested : 'adi-white-office';
+  return asset(req, `/headshots/${slug}.png`);
+}
+
 function textFit(value, maxLength) {
   const text = String(value || '').trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
@@ -47,16 +83,16 @@ function img(src, style) {
   });
 }
 
-function feature(value, label) {
+function feature(value, label, colors) {
   return el('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
     el('div', {
       style: {
         width: 38,
         height: 38,
         borderRadius: 999,
-        border: `2px solid ${GOLD}`,
-        backgroundColor: NAVY,
-        color: GOLD,
+        border: `2px solid ${colors.gold}`,
+        backgroundColor: colors.navy,
+        color: colors.gold,
         fontFamily: 'Inter',
         fontSize: 12,
         fontWeight: 800,
@@ -72,12 +108,14 @@ function feature(value, label) {
 
 export default async function handler(req) {
   const { searchParams: q } = new URL(req.url);
+  const theme = pickTheme(q);
+  const NAVY = theme.navy, GOLD = theme.gold, RED = theme.red, CREAM = theme.cream, INK = theme.ink, WHITE = theme.white;
 
   const photo1 = q.get('photo_url') || q.get('photo1_url') || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1400&h=900&fit=crop';
   const photo2 = q.get('photo2_url') || q.get('photo_2_url') || photo1;
   const photo3 = q.get('photo3_url') || q.get('photo_3_url') || photo1;
   const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
-  const headshotUrl = q.get('headshot_url') || asset(req, '/headshot.jpg');
+  const headshotUrl = pickHeadshot(req, q);
 
   const address = textFit(q.get('address') || '4521 Bayshore Drive, Miami, FL', 58);
   const price = textFit(q.get('price') || '$2,150,000', 16);
@@ -171,40 +209,12 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 42, lineHeight: 1.04, display: 'flex', marginTop: 10 } }, headline),
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: RED, fontSize: 64, lineHeight: 1, display: 'flex', marginTop: 12 } }, price),
       el('div', { style: { display: 'flex', gap: 20, marginTop: 18 } },
-        feature(beds, 'BD'),
-        feature(baths, 'BA'),
-        feature(sqft, 'SF'))),
+        feature(beds, 'BD', theme),
+        feature(baths, 'BA', theme),
+        feature(sqft, 'SF', theme))),
 
-    el('div', {
-      style: {
-        position: 'absolute',
-        top: 690,
-        right: 0,
-        bottom: 90,
-        width: 348,
-        display: 'flex',
-        backgroundColor: NAVY,
-        borderLeft: `5px solid ${GOLD}`,
-      },
-    }),
-    el('div', {
-      style: {
-        position: 'absolute',
-        top: 714,
-        right: 58,
-        width: 224,
-        height: 224,
-        display: 'flex',
-        backgroundColor: WHITE,
-        border: `5px solid ${GOLD}`,
-        borderRadius: 999,
-        overflow: 'hidden',
-      },
-    }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', right: 58, top: 714, width: 224, height: 224, borderRadius: 999, objectFit: 'cover', objectPosition: '22% 42%' } }),
-    el('div', { style: { position: 'absolute', right: 44, top: 934, width: 254, display: 'flex', flexDirection: 'column', alignItems: 'center' } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 24, display: 'flex' } }, agentName),
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 11, letterSpacing: 1, display: 'flex', marginTop: 3 } }, 'REAL ESTATE BROKER')),
+    el('div', { style: { position: 'absolute', right: 0, bottom: 90, width: 330, height: 390, backgroundColor: 'rgba(255,253,248,0.52)', display: 'flex' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', right: 0, bottom: 82, width: 330, height: 430, objectFit: 'contain' } }),
 
     el('div', {
       style: {

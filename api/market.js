@@ -11,6 +11,18 @@ const CREAM = '#F6EFE2';
 const INK = '#10243B';
 const WHITE = '#FFFDF8';
 
+const THEMES = {
+  luxury: { navy: '#071F36', gold: '#C8A052', red: '#8F171C', cream: '#F6EFE2', ink: '#10243B', white: '#FFFDF8' },
+  coastal: { navy: '#073B4C', gold: '#D7A94B', red: '#0F6E73', cream: '#F3F0E8', ink: '#0B2D3D', white: '#FFFFFF' },
+  modern: { navy: '#16202A', gold: '#BFA46A', red: '#5B2333', cream: '#F4F1EA', ink: '#111827', white: '#FFFFFF' },
+  warm: { navy: '#1F2933', gold: '#C89A4B', red: '#9A3B24', cream: '#F7EFE4', ink: '#1C2630', white: '#FFFFFF' },
+};
+
+function pickTheme(q) {
+  const requested = (q.get('theme') || '').toLowerCase();
+  return THEMES[requested] || THEMES.luxury;
+}
+
 async function loadGoogleFont(family, weight, text) {
   try {
     const css = await fetch(
@@ -27,36 +39,56 @@ async function loadGoogleFont(family, weight, text) {
 }
 
 const asset = (req, path) => new URL(path, req.url).toString();
+function pickHeadshot(req, q) {
+  const direct = q.get('headshot_url');
+  if (direct) return direct;
+  const allowed = new Set([
+    'adi-white-suit',
+    'adi-black-blazer',
+    'adi-pointing',
+    'adi-navy-seated',
+    'adi-black-standing',
+    'adi-street-black',
+    'adi-white-office',
+    'adi-green-blazer',
+    'adi-gray-blazer',
+  ]);
+  const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-green-blazer';
+  const slug = allowed.has(requested) ? requested : 'adi-green-blazer';
+  return asset(req, `/headshots/${slug}.png`);
+}
 const short = (value, max) => {
   const text = String(value || '').trim();
   return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
 };
 
-function statTile(num, label) {
+function statTile(num, label, colors) {
   return el('div', {
     style: {
       width: 250,
       height: 92,
-      backgroundColor: NAVY,
-      border: `2px solid ${GOLD}`,
+      backgroundColor: colors.navy,
+      border: `2px solid ${colors.gold}`,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
       padding: '12px 16px',
     },
   },
-    el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: GOLD, fontSize: 35, lineHeight: 1, display: 'flex' } }, short(num, 12)),
-    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: WHITE, fontSize: 12, letterSpacing: 1, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
+    el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: colors.gold, fontSize: 35, lineHeight: 1, display: 'flex' } }, short(num, 12)),
+    el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: colors.white, fontSize: 12, letterSpacing: 1, lineHeight: 1.2, display: 'flex', marginTop: 7 } }, short(label, 34).toUpperCase()));
 }
 
 export default async function handler(req) {
   const { searchParams: q } = new URL(req.url);
+  const theme = pickTheme(q);
+  const NAVY = theme.navy, GOLD = theme.gold, RED = theme.red, CREAM = theme.cream, INK = theme.ink, WHITE = theme.white;
 
   const headline = short(q.get('headline') || 'Sellers still have the edge', 52);
   const sub = short(q.get('sub') || 'South Florida inventory stays tight heading into fall.', 96);
   const photoUrl = q.get('photo_url') || q.get('background_url') || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1400&h=900&fit=crop';
   const logoUrl = q.get('logo_url') || asset(req, '/logo.jpg');
-  const headshotUrl = q.get('headshot_url') || asset(req, '/headshot.jpg');
+  const headshotUrl = pickHeadshot(req, q);
   const agentName = q.get('agent_name') || 'Adi Gal';
   const phone = q.get('phone') || '305-409-1305';
   const handle = q.get('handle') || '@adigalrealtor';
@@ -92,16 +124,12 @@ export default async function handler(req) {
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 62, letterSpacing: 1, display: 'flex' } }, 'MARKET PULSE')),
 
     el('div', { style: { position: 'absolute', top: 526, left: 0, right: 0, bottom: 90, backgroundColor: CREAM, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 526, right: 0, bottom: 90, width: 330, backgroundColor: NAVY, borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
-    el('div', { style: { position: 'absolute', top: 552, right: 48, width: 235, height: 235, borderRadius: 999, backgroundColor: WHITE, border: `5px solid ${GOLD}`, display: 'flex', overflow: 'hidden' } }),
-    el('img', { src: headshotUrl, style: { position: 'absolute', top: 544, right: 38, width: 255, height: 315, objectFit: 'cover', objectPosition: '22% 42%' } }),
+    el('div', { style: { position: 'absolute', top: 526, right: 0, bottom: 90, width: 318, backgroundColor: 'rgba(7,31,54,0.94)', borderLeft: `5px solid ${GOLD}`, display: 'flex' } }),
+    el('img', { src: headshotUrl, style: { position: 'absolute', right: 18, bottom: 90, width: 288, height: 400, objectFit: 'contain' } }),
     el('div', { style: { position: 'absolute', top: 560, left: 54, width: 650, display: 'flex', flexDirection: 'column' } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: INK, fontSize: 56, lineHeight: 1.04, display: 'flex' } }, headline),
       el('div', { style: { fontFamily: 'Inter', fontWeight: 600, color: '#4F6070', fontSize: 21, lineHeight: 1.32, display: 'flex', marginTop: 16 } }, sub),
-      el('div', { style: { display: 'flex', gap: 16, marginTop: 26, flexWrap: 'wrap' } }, ...stats.map(([num, label]) => statTile(num, label)))),
-    el('div', { style: { position: 'absolute', right: 48, bottom: 144, width: 235, height: 70, display: 'flex', flexDirection: 'column', alignItems: 'center' } },
-      el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 28, display: 'flex' } }, agentName),
-      el('div', { style: { fontFamily: 'Inter', fontWeight: 700, color: GOLD, fontSize: 13, letterSpacing: 1, display: 'flex', marginTop: 4 } }, 'SOUTH FLORIDA REALTOR')),
+      el('div', { style: { display: 'flex', gap: 16, marginTop: 26, flexWrap: 'wrap' } }, ...stats.map(([num, label]) => statTile(num, label, theme)))),
 
     el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: NAVY, borderTop: `5px solid ${GOLD}`, display: 'flex', alignItems: 'center', padding: '0 52px', gap: 26 } },
       el('div', { style: { fontFamily: 'Playfair', fontWeight: 900, color: WHITE, fontSize: 40, display: 'flex' } }, phone),
