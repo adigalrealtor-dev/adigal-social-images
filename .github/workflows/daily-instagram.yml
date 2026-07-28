@@ -36,7 +36,9 @@ jobs:
           ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
           BRIDGE_ACCESS_TOKEN: ${{ secrets.BRIDGE_ACCESS_TOKEN }}
           BRIDGE_DATASET_ID: ${{ secrets.BRIDGE_DATASET_ID }}
+          BRIDGE_AGENT_ID: ${{ secrets.BRIDGE_AGENT_ID }}
           BRIDGE_API_BASE: ${{ secrets.BRIDGE_API_BASE }}
+          BRIDGE_NATIVE_API_BASE: ${{ secrets.BRIDGE_NATIVE_API_BASE }}
           BRIDGE_AUTH_MODE: ${{ secrets.BRIDGE_AUTH_MODE }}
           BRIDGE_FILTER: ${{ secrets.BRIDGE_FILTER }}
           META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
