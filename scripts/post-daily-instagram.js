@@ -42,6 +42,10 @@ function money(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
 }
 
+function firstValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '') || '';
+}
+
 function buildUrl(path, params) {
   const url = new URL(path, BASE_URL);
   for (const [key, value] of Object.entries(params)) {
@@ -93,54 +97,100 @@ async function fetchBridgeListing(seed) {
   const dataset = process.env.BRIDGE_DATASET_ID;
   if (!token || !dataset) return null;
 
-  const bridgeBase = (process.env.BRIDGE_API_BASE || 'https://api.bridgedataoutput.com/api/v2/OData').replace(/\/$/, '');
-  const url = new URL(`${bridgeBase}/${encodeURIComponent(dataset)}/Property`);
-  url.searchParams.set('$top', process.env.BRIDGE_TOP || '12');
-  url.searchParams.set('$orderby', process.env.BRIDGE_ORDER_BY || 'ModificationTimestamp desc');
-  url.searchParams.set('$expand', 'Media');
+  try {
+    return await fetchBridgeODataListing({ token, dataset, seed });
+  } catch (error) {
+    console.warn(`Bridge OData listing lookup failed; trying native Bridge listings API. ${error.message}`);
+    return fetchBridgeNativeListing({ token, dataset, seed });
+  }
+}
 
-  const filter = process.env.BRIDGE_FILTER || "StandardStatus eq 'Active'";
-  if (filter) url.searchParams.set('$filter', filter);
-
+function bridgeAuth(url, token) {
   const headers = { Accept: 'application/json' };
   if ((process.env.BRIDGE_AUTH_MODE || 'query').toLowerCase() === 'bearer') {
     headers.Authorization = `Bearer ${token}`;
   } else {
     url.searchParams.set('access_token', token);
   }
+  return headers;
+}
 
+async function fetchBridgeODataListing({ token, dataset, seed }) {
+  const bridgeBase = (process.env.BRIDGE_API_BASE || 'https://api.bridgedataoutput.com/api/v2/OData').replace(/\/$/, '');
+  const url = new URL(`${bridgeBase}/${dataset}/Property`);
+  url.searchParams.set('$top', process.env.BRIDGE_TOP || '12');
+  url.searchParams.set('$orderby', process.env.BRIDGE_ORDER_BY || 'ModificationTimestamp desc');
+  url.searchParams.set('$expand', 'Media');
+
+  const agentId = process.env.BRIDGE_AGENT_ID;
+  const defaultFilter = agentId
+    ? `StandardStatus eq 'Active' and (ListAgentMlsId eq '${agentId}' or BuyerAgentMlsId eq '${agentId}')`
+    : "StandardStatus eq 'Active'";
+  const filter = process.env.BRIDGE_FILTER || defaultFilter;
+  if (filter) url.searchParams.set('$filter', filter);
+
+  const headers = bridgeAuth(url, token);
   const data = await fetchJson(url, { headers });
   const rows = data.value || data.d?.results || [];
   if (!rows.length) return null;
 
   const row = rows[Math.abs(hash(seed)) % rows.length];
-  const media = Array.isArray(row.Media) ? row.Media : [];
+  return normalizeBridgeListing(row);
+}
+
+async function fetchBridgeNativeListing({ token, dataset, seed }) {
+  const bridgeBase = (process.env.BRIDGE_NATIVE_API_BASE || 'https://api.bridgedataoutput.com/api/v2').replace(/\/$/, '');
+  const url = new URL(`${bridgeBase}/${dataset}/listings`);
+  url.searchParams.set('limit', process.env.BRIDGE_TOP || '12');
+  url.searchParams.set('sortBy', process.env.BRIDGE_NATIVE_SORT_BY || 'ModificationTimestamp');
+  url.searchParams.set('order', process.env.BRIDGE_NATIVE_ORDER || 'desc');
+  url.searchParams.set('StandardStatus', process.env.BRIDGE_STATUS || 'Active');
+  if (process.env.BRIDGE_AGENT_ID) url.searchParams.set('ListAgentMlsId', process.env.BRIDGE_AGENT_ID);
+
+  const headers = bridgeAuth(url, token);
+  const data = await fetchJson(url, { headers });
+  const rows = data.bundle || data.value || data.records || data.listings || data.data || [];
+  if (!rows.length) return null;
+
+  const row = rows[Math.abs(hash(seed)) % rows.length];
+  return normalizeBridgeListing(row);
+}
+
+function normalizeBridgeListing(row) {
+  const media = Array.isArray(row.Media)
+    ? row.Media
+    : Array.isArray(row.media)
+      ? row.media
+      : Array.isArray(row.Photos)
+        ? row.Photos
+        : [];
   const mediaUrls = media
-    .map((item) => item.MediaURL || item.MediaURLFull || item.MediaUrl || item.Url || item.uri)
+    .map((item) => firstValue(item.MediaURL, item.MediaURLFull, item.MediaUrl, item.Url, item.uri, item.url))
     .filter(Boolean)
     .slice(0, 3);
 
-  const city = row.City || row.CityRegion || '';
-  const state = row.StateOrProvince || row.State || 'FL';
-  const address = row.UnparsedAddress || [row.StreetNumber, row.StreetName, city, state].filter(Boolean).join(', ');
-  const headline = row.PublicRemarks
-    ? short(row.PublicRemarks.replace(/\s+/g, ' '), 'South Florida Residence', 42)
+  const city = firstValue(row.City, row.CityRegion);
+  const state = firstValue(row.StateOrProvince, row.State, 'FL');
+  const address = firstValue(row.UnparsedAddress, [row.StreetNumber, row.StreetName, city, state].filter(Boolean).join(', '));
+  const remarks = firstValue(row.PublicRemarks, row.Remarks, row.MarketingRemarks);
+  const headline = remarks
+    ? short(String(remarks).replace(/\s+/g, ' '), 'South Florida Residence', 42)
     : `${city || 'South Florida'} Residence`;
 
   return {
     address,
     city,
     state,
-    price: money(row.ListPrice || row.CurrentPrice || row.OriginalListPrice),
-    beds: row.BedroomsTotal || row.BedsTotal || row.Bedrooms || '3',
-    baths: row.BathroomsTotalInteger || row.BathroomsFull || row.BathsTotal || '2',
-    sqft: row.LivingArea || row.BuildingAreaTotal || row.LotSizeSquareFeet || '',
+    price: money(firstValue(row.ListPrice, row.CurrentPrice, row.OriginalListPrice)),
+    beds: firstValue(row.BedroomsTotal, row.BedsTotal, row.Bedrooms, '3'),
+    baths: firstValue(row.BathroomsTotalInteger, row.BathroomsFull, row.BathsTotal, row.BathsTotalInteger, '2'),
+    sqft: firstValue(row.LivingArea, row.BuildingAreaTotal, row.LotSizeSquareFeet),
     headline,
-    remarks: row.PublicRemarks || '',
+    remarks,
     photo1: mediaUrls[0],
     photo2: mediaUrls[1] || mediaUrls[0],
     photo3: mediaUrls[2] || mediaUrls[0],
-    propertyType: row.PropertyType || row.PropertySubType || '',
+    propertyType: firstValue(row.PropertyType, row.PropertySubType),
   };
 }
 
