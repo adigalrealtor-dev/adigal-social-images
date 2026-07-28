@@ -434,6 +434,7 @@ async function makeCaption(type, listing) {
   const prompt = [
     'Write an Instagram caption for Adi Gal, a South Florida real estate broker.',
     'Tone: polished, clear, helpful, not hypey.',
+    'Avoid emoji unless it is genuinely useful.',
     'Keep it under 1,300 characters.',
     'Include a short CTA to DM or call Adi.',
     'Include 5-9 relevant hashtags.',
@@ -442,7 +443,7 @@ async function makeCaption(type, listing) {
     listing ? `Listing context: ${JSON.stringify(listing).slice(0, 1800)}` : '',
   ].filter(Boolean).join('\n');
 
-  const models = [
+  const fallbackModels = [
     process.env.ANTHROPIC_MODEL,
     'claude-3-5-haiku-20241022',
     'claude-3-7-sonnet-20250219',
@@ -453,7 +454,12 @@ async function makeCaption(type, listing) {
     'claude-3-haiku-20240307',
   ].filter(Boolean);
 
-  const modelCandidates = [...new Set(models.concat(await availableAnthropicModels(apiKey)))];
+  const discoveredModels = await availableAnthropicModels(apiKey);
+  const modelCandidates = [...new Set([
+    process.env.ANTHROPIC_MODEL,
+    ...discoveredModels,
+    ...fallbackModels,
+  ].filter(Boolean))];
 
   for (const model of modelCandidates) {
     try {
