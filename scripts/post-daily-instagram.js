@@ -86,6 +86,17 @@ function researchHeadline(researchContext, fallback) {
   );
 }
 
+function researchSubline(researchContext, fallback, max = 84) {
+  const headline = researchHeadline(researchContext, '');
+  return headline ? short(headline, fallback, max) : fallback;
+}
+
+function mortgageRateFromResearch(researchContext) {
+  const text = String(researchContext || '');
+  const match = text.match(/\b([5-9]\.\d{1,2})%/);
+  return match ? `${match[1]}%` : '';
+}
+
 function isCondoLike(listing) {
   const text = [
     listing?.address,
@@ -111,14 +122,39 @@ function buildListingHeadline(row, { city, propertySubType, propertyType }) {
   const typeText = [type, propertyType, propertySubType, subdivision].join(' ');
   const normalizedType = /condo|condominium|apartment|unit/i.test(typeText)
     ? 'Condo'
+    : /income|multi.?family|duplex|triplex|quadruplex/i.test(typeText)
+      ? 'Income Property'
     : /lease|rental/i.test(typeText)
       ? 'Rental'
       : short(type, 'Residence', 18);
-  const area = ['Condo', 'Rental'].includes(normalizedType)
+  const area = ['Condo', 'Rental', 'Income Property'].includes(normalizedType)
     ? firstValue(city, subdivision, 'South Florida')
     : firstValue(subdivision, city, 'South Florida');
 
   return short(`${area} ${normalizedType}`, 'South Florida Residence', 34);
+}
+
+function listingStatusLabel(row) {
+  const typeText = [
+    row.TransactionType,
+    row.ListingType,
+    row.PropertyType,
+    row.PropertySubType,
+    row.StandardStatus,
+    row.MlsStatus,
+  ].join(' ').toLowerCase();
+
+  if (/commercial/.test(typeText) && /lease|rental|rent/.test(typeText)) return 'FOR LEASE';
+  if (/lease|rental|rent/.test(typeText)) return 'FOR RENT';
+  if (/income|sale|purchase|residential|single family|condo|townhouse|multi.?family|duplex|triplex|quadruplex/.test(typeText)) return 'FOR SALE';
+  return 'ACTIVE LISTING';
+}
+
+function listingActionText(label) {
+  if (label === 'FOR RENT') return 'available for rent';
+  if (label === 'FOR LEASE') return 'available for lease';
+  if (label === 'FOR SALE') return 'listed for sale';
+  return 'available now';
 }
 
 function postTypeFor(date = new Date()) {
@@ -186,12 +222,87 @@ function mortgageContent(seed, researchContext = '') {
   };
 }
 
+function marketContent(seed, researchContext = '') {
+  const topics = [
+    {
+      headline: 'Seller Market Check-In',
+      sub: 'Low inventory keeps well-priced South Florida homes competitive.',
+      stat1Num: 'Tight',
+      stat1Label: 'Inventory',
+      stat2Num: 'Fast',
+      stat2Label: 'Buyer activity',
+      stat3Num: 'Strong',
+      stat3Label: 'Pricing power',
+      caption: 'Market pulse: South Florida still rewards sellers who price strategically and present the property well. Buyers are active, but they are also selective. DM Adi Gal to review your neighborhood and timing.\n\nבשוק הנכון, תמחור נכון עושה את כל ההבדל.\n\n#MiamiRealEstate #SouthFloridaRealEstate #SellerMarket #HomeSelling #MiamiHomes #BrowardRealEstate #RealEstateBroker #SellWithAdi',
+    },
+    {
+      headline: 'Condo Market Snapshot',
+      sub: 'HOA, reserves, insurance, and location matter more than ever.',
+      stat1Num: 'HOA',
+      stat1Label: 'Key factor',
+      stat2Num: 'Reserves',
+      stat2Label: 'Buyer focus',
+      stat3Num: 'Location',
+      stat3Label: 'Value driver',
+      caption: 'Market pulse: condo buyers in South Florida are looking closely at HOA fees, building reserves, insurance, and lifestyle value. The right condo can still be a smart move when the numbers make sense. DM Adi Gal to compare options.\n\nבקניית דירה, חשוב לבדוק גם את הבניין ולא רק את היחידה.\n\n#MiamiCondos #SouthFloridaRealEstate #CondoMarket #MiamiRealEstate #HomeBuying #RealEstateInvesting #BrowardCondos #AdiGal',
+    },
+    {
+      headline: 'Investor Watch',
+      sub: 'Short-term rental rules and cash flow decide the real opportunity.',
+      stat1Num: 'Cash Flow',
+      stat1Label: 'Priority',
+      stat2Num: 'Rules',
+      stat2Label: 'STR check',
+      stat3Num: 'Exit',
+      stat3Label: 'Strategy',
+      caption: 'Market pulse: Airbnb and investment properties need more than a pretty listing. Review local rules, realistic income, reserves, HOA limits, and resale strategy before moving forward. DM Adi Gal to run the numbers.\n\nבהשקעה טובה, התשואה מתחילה בבדיקה נכונה.\n\n#MiamiInvesting #AirbnbInvestment #SouthFloridaRealEstate #InvestmentProperty #MiamiRealEstate #RentalProperty #RealEstateBroker #FloridaInvestors',
+    },
+    {
+      headline: 'Buyer Opportunity',
+      sub: 'Prepared buyers can still find value when they know where to look.',
+      stat1Num: 'Ready',
+      stat1Label: 'Pre-approval',
+      stat2Num: 'Local',
+      stat2Label: 'Market knowledge',
+      stat3Num: 'Smart',
+      stat3Label: 'Negotiation',
+      caption: 'Market pulse: buyers still have opportunities in South Florida, especially when they are pre-approved, focused, and ready to negotiate. The best value is usually found before everyone else notices it. DM Adi Gal to start searching.\n\nקונה מוכן יכול למצוא הזדמנות גם בשוק תחרותי.\n\n#MiamiHomes #HomeBuying #SouthFloridaRealEstate #BuyerOpportunity #MiamiRealEstate #BuySellInvest #FloridaHomes #RealEstateBroker',
+    },
+    {
+      headline: 'Luxury Demand Update',
+      sub: 'Lifestyle, taxes, and global demand continue to support Miami.',
+      stat1Num: 'Global',
+      stat1Label: 'Buyer demand',
+      stat2Num: 'Lifestyle',
+      stat2Label: 'Main driver',
+      stat3Num: 'Miami',
+      stat3Label: 'Long-term appeal',
+      caption: 'Market pulse: Miami luxury demand continues to be driven by lifestyle, tax advantages, business relocation, and international buyers. The right property still needs smart pricing and sharp negotiation. DM Adi Gal for guidance.\n\nמיאמי ממשיכה למשוך קונים שמחפשים איכות חיים והשקעה חכמה.\n\n#MiamiLuxuryRealEstate #SouthFloridaRealEstate #MiamiHomes #LuxuryMarket #RealEstateBroker #BuySellInvest #FloridaRealEstate #AdiGal',
+    },
+  ];
+
+  const text = String(researchContext || '').toLowerCase();
+  const matchedTopic = [
+    [/condo|hoa|reserve|assessment|insurance/, 'Condo Market Snapshot'],
+    [/airbnb|short.?term|rental|investor|investment/, 'Investor Watch'],
+    [/luxury|waterfront|international|global|relocation/, 'Luxury Demand Update'],
+    [/buyer|affordability|opportunity|rent/, 'Buyer Opportunity'],
+    [/seller|inventory|supply|price|pricing/, 'Seller Market Check-In'],
+  ].map(([pattern, headline]) => pattern.test(text) && topics.find((topic) => topic.headline === headline)).find(Boolean);
+
+  return matchedTopic || pick(topics, seed);
+}
+
 function fallbackCaption(type, listing, seed, researchContext = '') {
   if (type === 'mortgage') return mortgageContent(seed, researchContext).caption;
   if (type === 'listing' && listing) {
-    return `${listing.headline || 'South Florida listing'}: ${listing.address || 'new property available'} listed at ${listing.price || 'today'}${listing.beds ? ` with ${listing.beds} beds` : ''}${listing.baths ? ` and ${listing.baths} baths` : ''}. DM Adi Gal for details or to schedule a showing.\n\nלפרטים נוספים או לתיאום סיור, שלחו הודעה לאדי גל.\n\n#MiamiRealEstate #SouthFloridaRealEstate #MiamiListings #HomeForSale #RealEstateBroker #BuySellInvest #FloridaRealEstate`;
+    const action = listingActionText(listing.statusLabel);
+    const hashtags = listing.statusLabel === 'FOR RENT' || listing.statusLabel === 'FOR LEASE'
+      ? '#MiamiRealEstate #SouthFloridaRealEstate #MiamiRentals #ForRentMiami #MiamiListings #RealEstateBroker #FloridaRealEstate'
+      : '#MiamiRealEstate #SouthFloridaRealEstate #MiamiListings #HomeForSale #InvestmentProperty #RealEstateBroker #BuySellInvest #FloridaRealEstate';
+    return `${listing.headline || 'South Florida listing'} ${action}: ${listing.address || 'new property available'} at ${listing.price || 'today'}${listing.beds ? ` with ${listing.beds} beds` : ''}${listing.baths ? ` and ${listing.baths} baths` : ''}. DM Adi Gal for details or to schedule a showing.\n\nלפרטים נוספים או לתיאום סיור, שלחו הודעה לאדי גל.\n\n${hashtags}`;
   }
-  return 'South Florida real estate update. DM Adi Gal for details. #SouthFloridaRealEstate #MiamiRealEstate #BrowardRealEstate #RealEstateBroker';
+  return marketContent(seed, researchContext).caption;
 }
 
 async function fetchJson(url, options = {}) {
@@ -240,10 +351,12 @@ function rssItems(xml, limit = 6) {
     .map((match) => {
       const item = match[0];
       const field = (name) => decodeXml(item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'))?.[1]);
+      const date = field('pubDate');
       return {
         title: field('title'),
         source: field('source'),
-        date: field('pubDate'),
+        date,
+        dateMs: Date.parse(date),
         summary: field('description'),
       };
     })
@@ -251,21 +364,60 @@ function rssItems(xml, limit = 6) {
     .slice(0, limit);
 }
 
+function itemMatches(type, item) {
+  const text = `${item.title} ${item.summary} ${item.source}`.toLowerCase();
+  if (type === 'mortgage') {
+    return /mortgage|rate|interest|refinance|buy vs rent|affordability|housing/.test(text);
+  }
+  return /miami|south florida|broward|palm beach|condo|housing|real estate|inventory|seller|buyer|airbnb|short.?term|luxury/.test(text)
+    && !/world cup|soccer|stadium/.test(text);
+}
+
+function isRecentItem(item, maxAgeDays = 10) {
+  if (!Number.isFinite(item.dateMs)) return true;
+  return Date.now() - item.dateMs <= maxAgeDays * 24 * 60 * 60 * 1000;
+}
+
 async function fetchResearchContext(type) {
   if (type === 'listing') return '';
 
-  const query = type === 'mortgage'
-    ? 'mortgage rates today buy vs rent housing market'
-    : 'Miami South Florida real estate market condo market Airbnb investment';
-  const url = new URL('https://news.google.com/rss/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('hl', 'en-US');
-  url.searchParams.set('gl', 'US');
-  url.searchParams.set('ceid', 'US:en');
+  const queries = type === 'mortgage'
+    ? [
+      'mortgage rates today housing market when:3d',
+      'buy vs rent mortgage affordability Florida when:7d',
+      'current mortgage rates real estate buyers when:7d',
+    ]
+    : [
+      'Miami real estate market inventory prices condo when:7d',
+      'South Florida housing market buyers sellers inventory when:7d',
+      'Miami Airbnb short term rental investment real estate when:14d',
+      'Broward Miami luxury real estate market when:14d',
+    ];
 
   try {
-    const xml = await fetchText(url);
-    const items = rssItems(xml);
+    const results = await Promise.all(queries.map(async (query) => {
+      const url = new URL('https://news.google.com/rss/search');
+      url.searchParams.set('q', query);
+      url.searchParams.set('hl', 'en-US');
+      url.searchParams.set('gl', 'US');
+      url.searchParams.set('ceid', 'US:en');
+      const xml = await fetchText(url);
+      return rssItems(xml, 8);
+    }));
+
+    const seen = new Set();
+    const items = results
+      .flat()
+      .filter((item) => itemMatches(type, item))
+      .filter((item) => isRecentItem(item, type === 'mortgage' ? 7 : 14))
+      .filter((item) => {
+        const key = item.title.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 8);
+
     if (!items.length) return '';
     return items
       .map((item, index) => `${index + 1}. ${item.title}${item.source ? ` (${item.source})` : ''}${item.date ? ` - ${item.date}` : ''}`)
@@ -402,6 +554,7 @@ function normalizeBridgeListing(row) {
   const propertyType = firstValue(row.PropertyType, row.PropertySubType);
   const propertySubType = firstValue(row.PropertySubType, row.PropertySubTypeAdditional);
   const headline = buildListingHeadline(row, { city, propertySubType, propertyType });
+  const statusLabel = listingStatusLabel(row);
 
   const listing = {
     listingId: firstValue(row.ListingId, row.ListingID, row.MlsNumber),
@@ -418,6 +571,7 @@ function normalizeBridgeListing(row) {
     remarks,
     propertyType,
     propertySubType,
+    statusLabel,
   };
 
   const selectedMediaUrls = selectListingPhotoUrls(mediaUrls, listing);
@@ -590,6 +744,7 @@ function buildImage(type, listing, seed, researchContext = '') {
       baths: listing.baths,
       sqft: listing.sqft,
       property_type: listing.propertyType,
+      tag_label: listing.statusLabel,
       theme,
       headshot,
       v: seed,
@@ -598,9 +753,10 @@ function buildImage(type, listing, seed, researchContext = '') {
 
   if (type === 'mortgage') {
     const mortgage = mortgageContent(seed, researchContext);
+    const currentRate = mortgageRateFromResearch(researchContext);
     return buildUrl('/api/mortgage', {
-      rate: process.env.MORTGAGE_RATE || mortgage.rate,
-      headline_en: process.env.MORTGAGE_HEADLINE_EN || mortgage.headlineEn,
+      rate: process.env.MORTGAGE_RATE || currentRate || mortgage.rate,
+      headline_en: process.env.MORTGAGE_HEADLINE_EN || (currentRate ? 'Mortgage Rates Today' : mortgage.headlineEn),
       headline_he: process.env.MORTGAGE_HEADLINE_HE || mortgage.headlineHe,
       theme,
       headshot,
@@ -608,15 +764,16 @@ function buildImage(type, listing, seed, researchContext = '') {
     });
   }
 
+  const market = marketContent(seed, researchContext);
   return buildUrl('/api/market', {
-    headline: process.env.MARKET_HEADLINE || researchHeadline(researchContext, 'South Florida Market Pulse'),
-    sub: process.env.MARKET_SUB || 'A quick look at what buyers and sellers should watch this week.',
-    stat1_num: process.env.MARKET_STAT1_NUM || '2.1 mo',
-    stat1_label: process.env.MARKET_STAT1_LABEL || 'Inventory',
-    stat2_num: process.env.MARKET_STAT2_NUM || '38 days',
-    stat2_label: process.env.MARKET_STAT2_LABEL || 'Avg. time on market',
-    stat3_num: process.env.MARKET_STAT3_NUM || '+4.2%',
-    stat3_label: process.env.MARKET_STAT3_LABEL || 'Median price YoY',
+    headline: process.env.MARKET_HEADLINE || market.headline,
+    sub: process.env.MARKET_SUB || researchSubline(researchContext, market.sub),
+    stat1_num: process.env.MARKET_STAT1_NUM || market.stat1Num,
+    stat1_label: process.env.MARKET_STAT1_LABEL || market.stat1Label,
+    stat2_num: process.env.MARKET_STAT2_NUM || market.stat2Num,
+    stat2_label: process.env.MARKET_STAT2_LABEL || market.stat2Label,
+    stat3_num: process.env.MARKET_STAT3_NUM || market.stat3Num,
+    stat3_label: process.env.MARKET_STAT3_LABEL || market.stat3Label,
     theme,
     headshot,
     v: seed,
@@ -651,8 +808,9 @@ async function makeCaption(type, listing, seed, researchContext = '') {
     'Write the main caption in English, then add one natural Hebrew line.',
     'Include 7-12 relevant hashtags focused on Miami real estate, South Florida real estate, buying, selling, investing, listings, and mortgages when relevant.',
     `Post type: ${type}.`,
-    type === 'market' ? 'Use the research context to choose a timely topic such as seller market, buyer market, condo market, Airbnb investment, inventory, prices, or South Florida demand.' : '',
-    type === 'mortgage' ? 'Use the research context to discuss mortgage rates, buy vs rent, affordability, refinancing, or investing for the future.' : '',
+    type === 'market' ? 'Do not write a generic daily market update. Pick one concrete angle for today: seller market, buyer opportunity, condo market, Airbnb/short-term rental investing, luxury demand, inventory, insurance, prices, or South Florida demand.' : '',
+    type === 'mortgage' ? 'Do not write the same generic mortgage watch caption. Pick one concrete angle for today: rate check, monthly payment, buy vs rent, pre-approval, refinancing, affordability, investor financing, or payment strategy.' : '',
+    type === 'listing' ? 'Be specific about whether the listing is for rent, for lease, or for sale. Mention the address, price, beds/baths if present, and that the carousel includes property photos.' : '',
     researchContext ? `Fresh research context:\n${researchContext.slice(0, 1800)}` : '',
     listing ? `Listing context: ${JSON.stringify(listing).slice(0, 1800)}` : '',
   ].filter(Boolean).join('\n');
