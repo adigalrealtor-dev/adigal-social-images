@@ -913,13 +913,22 @@ async function publishInstagram(imageUrls, caption) {
 }
 
 async function publishFacebook(imageUrls, caption) {
-  const pageId = cleanSecret(process.env.META_FB_PAGE_ID);
+  const requestedPageId = cleanSecret(process.env.META_FB_PAGE_ID);
+  const requestedPageName = cleanSecret(process.env.META_FB_PAGE_NAME || 'Adi Gal');
   const baseToken = cleanSecret(process.env.META_FB_PAGE_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN);
-  if (!pageId || !baseToken) return null;
+  if (!baseToken) return null;
 
   const graphVersion = process.env.META_GRAPH_VERSION || 'v20.0';
   const graphBase = `https://graph.facebook.com/${graphVersion}`;
-  const token = await resolveFacebookPageToken({ graphBase, pageId, token: baseToken });
+  const page = await resolveFacebookPage({ graphBase, pageId: requestedPageId, pageName: requestedPageName, token: baseToken });
+  if (!page?.id || !page?.access_token) {
+    const skipped = `Facebook page "${requestedPageName || requestedPageId || 'unspecified'}" is not available to this token; skipping Facebook publish.`;
+    console.warn(skipped);
+    return { skipped };
+  }
+
+  const pageId = page.id;
+  const token = page.access_token;
   const images = (Array.isArray(imageUrls) ? imageUrls : [imageUrls]).filter(Boolean).slice(0, 10);
   if (!images.length) return null;
 
@@ -948,20 +957,30 @@ async function publishFacebook(imageUrls, caption) {
   return fetchJson(feedUrl, { method: 'POST' });
 }
 
-async function resolveFacebookPageToken({ graphBase, pageId, token }) {
+async function resolveFacebookPage({ graphBase, pageId, pageName, token }) {
   const accountsUrl = new URL(`${graphBase}/me/accounts`);
   accountsUrl.searchParams.set('fields', 'id,name,access_token');
   accountsUrl.searchParams.set('access_token', token);
 
   try {
     const data = await fetchJson(accountsUrl);
-    const page = (data.data || []).find((item) => String(item.id) === String(pageId));
-    if (page?.access_token) return page.access_token;
+    const pages = data.data || [];
+    const normalizedName = pageName.toLowerCase();
+    const page = normalizedName
+      ? pages.find((item) => String(item.name || '').trim().toLowerCase() === normalizedName)
+      : pages.find((item) => String(item.id) === String(pageId));
+
+    if (page?.access_token) return page;
+
+    if (pageId) {
+      const wrongPage = pages.find((item) => String(item.id) === String(pageId));
+      if (wrongPage?.access_token && !normalizedName) return wrongPage;
+    }
   } catch (error) {
-    console.warn(`Could not derive Facebook Page token; using provided token. ${error.message}`);
+    console.warn(`Could not derive Facebook Page token. ${error.message}`);
   }
 
-  return token;
+  return null;
 }
 
 async function main() {
