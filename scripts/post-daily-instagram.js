@@ -10,15 +10,7 @@ const DESTINATIONS = cleanSecret(process.env.POST_DESTINATIONS || 'instagram,fac
 
 const IG_ACCOUNT_LABEL = 'Adi Gal | הנדלניסטית | Real Estate';
 const HEADSHOTS = [
-  'adi-white-suit',
-  'adi-white-office',
-  'adi-black-blazer',
-  'adi-black-standing',
-  'adi-green-blazer',
-  'adi-navy-seated',
-  'adi-gray-blazer',
-  'adi-pointing',
-  'adi-street-black',
+  'adi-current',
 ];
 
 const THEMES = ['luxury', 'coastal', 'modern', 'warm'];
@@ -32,6 +24,15 @@ function required(name) {
 function pick(list, seed) {
   const index = Math.abs(hash(seed)) % list.length;
   return list[index];
+}
+
+function cyclePick(list, seed, offset = 0) {
+  if (!list.length) return null;
+  const match = String(seed || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const dayIndex = match
+    ? Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000)
+    : Math.abs(hash(seed));
+  return list[Math.abs(dayIndex + offset) % list.length];
 }
 
 function hash(value) {
@@ -189,7 +190,7 @@ function seedForRun(type, date = new Date()) {
 }
 
 function mortgageContent(seed, researchContext = '') {
-  const topic = pick([
+  const topics = [
     {
       rate: 'Rate Check',
       headlineEn: 'Buy vs. Rent Check-In',
@@ -214,7 +215,19 @@ function mortgageContent(seed, researchContext = '') {
       headlineHe: 'אישור עקרוני לפני סיור',
       caption: 'Mortgage watch: serious buyers should refresh pre-approval before touring. It helps you move faster, negotiate cleaner, and avoid surprises once the right South Florida property appears. DM Adi Gal to get prepared.\n\nקונה מוכן יכול לפעול מהר כשהנכס הנכון מופיע.\n\n#MiamiHomes #HomeBuyerTips #MortgagePreapproval #SouthFloridaRealEstate #MiamiRealEstate #BuyAHome #RealEstateBroker #FloridaProperty',
     },
-  ], seed);
+  ];
+
+  const text = String(researchContext || '').toLowerCase();
+  const matchingTopics = topics.filter((topic) => {
+    if (/buy vs rent|rent/.test(text) && topic.headlineEn.includes('Rent')) return true;
+    if (/payment|afford|insurance|hoa/.test(text) && topic.rate === 'Payment Focus') return true;
+    if (/invest|rental|cash flow/.test(text) && topic.rate === 'Investor Lens') return true;
+    if (/pre.?approval|buyer|tour/.test(text) && topic.rate === 'Buyer Strategy') return true;
+    if (/rate|interest|mortgage/.test(text) && topic.rate === 'Rate Check') return true;
+    return false;
+  });
+
+  const topic = cyclePick(matchingTopics.length > 1 ? matchingTopics : topics, seed, 1);
 
   return {
     ...topic,
@@ -282,15 +295,15 @@ function marketContent(seed, researchContext = '') {
   ];
 
   const text = String(researchContext || '').toLowerCase();
-  const matchedTopic = [
+  const matchedTopics = [
     [/condo|hoa|reserve|assessment|insurance/, 'Condo Market Snapshot'],
     [/airbnb|short.?term|rental|investor|investment/, 'Investor Watch'],
     [/luxury|waterfront|international|global|relocation/, 'Luxury Demand Update'],
     [/buyer|affordability|opportunity|rent/, 'Buyer Opportunity'],
     [/seller|inventory|supply|price|pricing/, 'Seller Market Check-In'],
-  ].map(([pattern, headline]) => pattern.test(text) && topics.find((topic) => topic.headline === headline)).find(Boolean);
+  ].map(([pattern, headline]) => pattern.test(text) && topics.find((topic) => topic.headline === headline)).filter(Boolean);
 
-  return matchedTopic || pick(topics, seed);
+  return cyclePick(matchedTopics.length > 1 ? matchedTopics : topics, seed, 2);
 }
 
 function fallbackCaption(type, listing, seed, researchContext = '') {
@@ -537,7 +550,7 @@ async function fetchBridgeNativeListing({ token, dataset, seed }) {
 function pickBridgeListing(listings, seed) {
   const usefulListings = listings.filter((listing) => listing?.photo1 || listing?.photosCount > 0);
   const pool = usefulListings.length ? usefulListings : listings.filter((listing) => listing?.listingId);
-  return pool.length ? pick(pool, seed) : null;
+  return pool.length ? cyclePick(pool, seed, 3) : null;
 }
 
 function normalizeBridgeListing(row) {
@@ -730,7 +743,7 @@ async function fetchBridgeRetsPhotoUrls({ dataset, listingId }) {
 
 function buildImage(type, listing, seed, researchContext = '') {
   const theme = pick(THEMES, seed);
-  const headshot = pick(HEADSHOTS, seed);
+  const headshot = HEADSHOTS[0];
 
   if (type === 'listing' && listing?.photo1) {
     return buildUrl('/api/listing', {

@@ -54,6 +54,7 @@ function pickHeadshot(req, q) {
   const requested = q.get('headshot') || q.get('headshot_slug') || 'adi-white-office';
   if (requested.toLowerCase() === 'none') return null;
   const allowed = new Set([
+    'adi-current',
     'adi-white-suit',
     'adi-black-blazer',
     'adi-pointing',
